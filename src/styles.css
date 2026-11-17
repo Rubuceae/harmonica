@@ -318,8 +318,7 @@ input[type="range"] {
 .jianpu-panel {
   padding: 0;
   background: #f0fdfa;
-  max-height: 780px;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .jianpu-svg {
