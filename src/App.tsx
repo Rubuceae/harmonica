@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { HardSpotList } from './components/HardSpotList'
-import { DurationLegend, JianpuView } from './components/JianpuView'
+import { JianpuView } from './components/JianpuView'
 import { MetricsPanel } from './components/MetricsPanel'
 import { RecommendationTable } from './components/RecommendationTable'
 import { StaffView } from './components/StaffView'
@@ -411,6 +411,13 @@ export default function App() {
 
           <p className="hint">看五线谱时先看调号；简谱把升降号显式写出。原调只作标签，演奏看当前调。</p>
           <p className="hint">孔位是优化器选的，不是固定映射；关掉孔位时只看音高。</p>
+
+          <details className="duration-help">
+            <summary>时值写法</summary>
+            <p>
+              四分 <b>1</b>；二分 <b>1 —</b>；全音符 <b>1 — — —</b>；八分数字下 1 条线；十六分 2 条线；附点数字后加点；休止 <b>0</b>。
+            </p>
+          </details>
         </aside>
 
         <section className="panel score-panel">
@@ -437,18 +444,15 @@ export default function App() {
 
           {result ? (
             view === 'jianpu' ? (
-              <>
-                <JianpuView
-                  notes={score.notes}
-                  transpose={transposition}
-                  sig={currentSig}
-                  timeSignature={score.timeSignature}
-                  hardSpotIds={hardSpotIds}
-                  fingerings={result.fingerings}
-                  showTab={showTab}
-                />
-                <DurationLegend />
-              </>
+              <JianpuView
+                notes={score.notes}
+                transpose={transposition}
+                sig={currentSig}
+                timeSignature={score.timeSignature}
+                hardSpotIds={hardSpotIds}
+                fingerings={result.fingerings}
+                showTab={showTab}
+              />
             ) : (
               <StaffView
                 notes={score.notes}

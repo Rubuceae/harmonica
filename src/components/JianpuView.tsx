@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { KeySignature } from '../core/keys'
 import { jianpuForMidi } from '../core/jianpu'
 import type { Fingering, NoteEvent } from '../core/types'
@@ -12,92 +13,80 @@ type Props = {
   showTab: boolean
 }
 
-const BASE_WIDTH = 56
+const BEAT_WIDTH = 64
+const MEASURE_PAD = 8
+const NUMBER_Y = 26
+const BEAM_Y = 42
+const LINE_HEIGHT = 64
+const TAB_LINE_HEIGHT = 80
 
-type DurationInfo = {
-  dotted: boolean
-  dashes: number
-  underlines: number
-  width: number
-}
+type Event =
+  | { kind: 'note'; note: NoteEvent; index: number; duration: number }
+  | { kind: 'rest'; id: string; onset: number; duration: number }
 
-function durationInfo(duration: number, unit: number): DurationInfo {
+type Measure = { measure: number; events: Event[] }
+
+function baseDuration(duration: number): number {
   const candidates = [4, 2, 1, 0.5, 0.25, 0.125]
-  const base = candidates.find(value => duration >= value - 1e-6) ?? 0.125
-  const dotted = Math.abs(duration - base * 1.5) < 1e-6
-  const dashes = base >= 1 ? Math.round(base - 1) : 0
-  const underlines = base < 1 ? Math.round(Math.log2(1 / base)) : 0
-  const minWidth = base <= 0.25 ? 24 : base <= 0.5 ? 30 : 34
-  return {
-    dotted,
-    dashes,
-    underlines,
-    width: Math.max(minWidth, duration * unit),
+  return candidates.find(value => duration >= value - 1e-6) ?? 0.125
+}
+
+function beamLevel(duration: number): number {
+  const base = baseDuration(duration)
+  return base >= 1 ? 0 : Math.round(Math.log2(1 / base))
+}
+
+function isDotted(duration: number): boolean {
+  const base = baseDuration(duration)
+  return Math.abs(duration - base * 1.5) < 1e-6
+}
+
+function dashCount(duration: number): number {
+  const base = baseDuration(duration)
+  return base >= 1 ? Math.round(base - 1) : 0
+}
+
+function fontSize(level: number): number {
+  if (level >= 2) return 14
+  if (level === 1) return 18
+  return 20
+}
+
+function buildMeasures(notes: NoteEvent[], measureBeats: number): Measure[] {
+  const byMeasure = new Map<number, { note: NoteEvent; index: number }[]>()
+  notes.forEach((note, index) => {
+    const list = byMeasure.get(note.measure) ?? []
+    list.push({ note, index })
+    byMeasure.set(note.measure, list)
+  })
+
+  const maxMeasure = Math.max(...byMeasure.keys(), 1)
+  const measures: Measure[] = []
+  for (let measure = 1; measure <= maxMeasure; measure += 1) {
+    const start = (measure - 1) * measureBeats
+    const items = (byMeasure.get(measure) ?? []).slice().sort((a, b) => a.note.onset - b.note.onset)
+    const events: Event[] = []
+    let cursor = start
+    for (const item of items) {
+      const gap = item.note.onset - cursor
+      if (gap > 1e-6) {
+        events.push({ kind: 'rest', id: `r${measure}-${events.length}`, onset: cursor, duration: gap })
+      }
+      events.push({ kind: 'note', note: item.note, index: item.index, duration: item.note.duration })
+      cursor = item.note.onset + item.note.duration
+    }
+    const tail = start + measureBeats - cursor
+    if (tail > 1e-6) {
+      events.push({ kind: 'rest', id: `r${measure}-tail`, onset: cursor, duration: tail })
+    }
+    if (events.length > 0) measures.push({ measure, events })
   }
+  return measures
 }
 
-type GlyphProps = {
-  degree: string
-  accidental?: '#' | 'b' | ''
-  octave?: number
-  duration: number
-  hard?: boolean
-  rest?: boolean
-  tab?: string
-  tabBreath?: 'blow' | 'draw'
-  unit?: number
+function eventOnset(event: Event): number {
+  return event.kind === 'note' ? event.note.onset : event.onset
 }
-
-function JianpuGlyph({
-  degree,
-  accidental = '',
-  octave = 0,
-  duration,
-  hard,
-  rest,
-  tab,
-  tabBreath,
-  unit = BASE_WIDTH,
-}: GlyphProps) {
-  const info = durationInfo(duration, unit)
-  const sizeClass = info.underlines > 1 ? ' tiny' : info.underlines > 0 ? ' short' : ''
-  return (
-    <div
-      className={`jp-event${hard ? ' hard' : ''}${rest ? ' rest' : ''}${sizeClass}`}
-      style={{ width: `${info.width}px` }}
-      title={`${duration} 拍`}
-    >
-      <div className="jp-above">{octave > 0 ? '·'.repeat(octave) : '\u00a0'}</div>
-      <div className="jp-row">
-        <span className="jp-main">
-          {accidental && <span className="acc">{accidental}</span>}
-          <span className="degree">{degree}</span>
-          {info.dotted && <span className="dot-mark">·</span>}
-        </span>
-        {info.dashes > 0 && (
-          <span className="jp-dashes">
-            {Array.from({ length: info.dashes }).map((_, index) => (
-              <span className="dash" key={index}>
-                —
-              </span>
-            ))}
-          </span>
-        )}
-      </div>
-      <div className="jp-below">{octave < 0 ? '·'.repeat(-octave) : '\u00a0'}</div>
-      <div className="jp-underlines">
-        {Array.from({ length: info.underlines }).map((_, index) => (
-          <span className="underline" key={index} />
-        ))}
-      </div>
-      {tab && <div className={`tab ${tabBreath ?? ''}`}>{tab}</div>}
-    </div>
-  )
-}
-
-type MeasureEvent =
-  | { kind: 'note'; note: NoteEvent; index: number }
-  | { kind: 'rest'; id: string; duration: number }
 
 export function JianpuView({
   notes,
@@ -108,93 +97,191 @@ export function JianpuView({
   fingerings,
   showTab,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(900)
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const update = () => setWidth(container.clientWidth || 900)
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
   const measureBeats = (timeSignature[0] * 4) / timeSignature[1]
-  const byMeasure = new Map<number, { note: NoteEvent; index: number }[]>()
-  notes.forEach((note, index) => {
-    const list = byMeasure.get(note.measure) ?? []
-    list.push({ note, index })
-    byMeasure.set(note.measure, list)
-  })
+  const measureWidth = measureBeats * BEAT_WIDTH + MEASURE_PAD * 2
+  const perLine = Math.max(1, Math.min(4, Math.floor((width - 16) / measureWidth)))
+  const measures = buildMeasures(notes, measureBeats)
+  const lineHeight = showTab ? TAB_LINE_HEIGHT : LINE_HEIGHT
+  const lineCount = Math.max(1, Math.ceil(measures.length / perLine))
+  const svgWidth = perLine * measureWidth + 16
+  const svgHeight = lineCount * lineHeight + 8
 
-  const maxMeasure = Math.max(...byMeasure.keys(), 1)
-  const measures: { measure: number; events: MeasureEvent[] }[] = []
-  for (let measure = 1; measure <= maxMeasure; measure += 1) {
-    const start = (measure - 1) * measureBeats
-    const items = (byMeasure.get(measure) ?? []).slice().sort((a, b) => a.note.onset - b.note.onset)
-    const events: MeasureEvent[] = []
-    let cursor = start
-    for (const item of items) {
-      const gap = item.note.onset - cursor
-      if (gap > 1e-6) {
-        events.push({ kind: 'rest', id: `r${measure}-${events.length}`, duration: gap })
-      }
-      events.push({ kind: 'note', note: item.note, index: item.index })
-      cursor = item.note.onset + item.note.duration
-    }
-    const tail = start + measureBeats - cursor
-    if (tail > 1e-6) {
-      events.push({ kind: 'rest', id: `r${measure}-tail`, duration: tail })
-    }
-    if (events.length > 0) measures.push({ measure, events })
-  }
+  const xOf = (event: Event, measureIndex: number, measureStart: number) =>
+    8 + measureIndex * measureWidth + MEASURE_PAD + (eventOnset(event) - measureStart) * BEAT_WIDTH
 
   return (
-    <div className="jianpu">
-      {measures.map(({ measure, events }) => (
-        <div className="measure" key={measure}>
-          <span className="measure-number">{measure}</span>
-          <div className="measure-notes">
-            {events.map(event => {
-              if (event.kind === 'rest') {
-                return <JianpuGlyph key={event.id} degree="0" duration={event.duration} rest />
-              }
-              const { note, index } = event
-              const jp = jianpuForMidi(note.midi + transpose, sig.preferFlats)
-              const fingering = fingerings[index]
-              const tab =
-                showTab && fingering
-                  ? `${fingering.hole}${fingering.breath === 'blow' ? '↑' : '↓'}${fingering.slide ? '+' : ''}`
-                  : undefined
-              return (
-                <JianpuGlyph
-                  key={note.id}
-                  degree={String(jp.degree)}
-                  accidental={jp.accidental}
-                  octave={jp.octave}
-                  duration={note.duration}
-                  hard={hardSpotIds.has(note.id)}
-                  tab={tab}
-                  tabBreath={fingering?.breath}
-                />
-              )
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
+    <div className="jianpu-svg" ref={containerRef}>
+      <svg
+        width={svgWidth}
+        height={svgHeight}
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        role="img"
+        aria-label="简谱"
+      >
+        {Array.from({ length: lineCount }).map((_, lineIndex) => {
+          const lineMeasures = measures.slice(lineIndex * perLine, lineIndex * perLine + perLine)
+          return (
+            <g key={lineIndex} transform={`translate(0 ${lineIndex * lineHeight + 8})`}>
+              {lineMeasures.map((measure, measureIndex) => {
+                const measureStart = (measure.measure - 1) * measureBeats
+                const measureX = 8 + measureIndex * measureWidth
+                const events = measure.events
+                const groups: Event[][] = []
+                let group: Event[] = []
+                for (const event of events) {
+                  if (beamLevel(event.duration) >= 1) {
+                    group.push(event)
+                  } else if (group.length > 0) {
+                    groups.push(group)
+                    group = []
+                  }
+                }
+                if (group.length > 0) groups.push(group)
 
-export function DurationLegend() {
-  const samples: { label: string; duration: number }[] = [
-    { label: '四分', duration: 1 },
-    { label: '二分', duration: 2 },
-    { label: '全音符', duration: 4 },
-    { label: '八分', duration: 0.5 },
-    { label: '十六分', duration: 0.25 },
-    { label: '附点四分', duration: 1.5 },
-    { label: '附点二分', duration: 3 },
-  ]
-
-  return (
-    <div className="duration-legend">
-      <span className="legend-title">时值</span>
-      {samples.map(sample => (
-        <div className="legend-item" key={sample.label}>
-          <JianpuGlyph degree="1" duration={sample.duration} unit={36} />
-          <span>{sample.label}</span>
-        </div>
-      ))}
+                return (
+                  <g key={measure.measure}>
+                    <line
+                      x1={measureX}
+                      y1={8}
+                      x2={measureX}
+                      y2={lineHeight - 12}
+                      stroke="#d6d3d1"
+                      strokeWidth={1}
+                    />
+                    {events.map((event, eventIndex) => {
+                      const x = xOf(event, measureIndex, measureStart)
+                      const level = beamLevel(event.duration)
+                      const fs = fontSize(level)
+                      const dotted = isDotted(event.duration)
+                      const dashes = dashCount(event.duration)
+                      const isNote = event.kind === 'note'
+                      const hard = isNote && hardSpotIds.has(event.note.id)
+                      const color = isNote ? (hard ? '#c2410c' : '#1f2933') : '#9ca3af'
+                      let degree = '0'
+                      let accidental = ''
+                      let octave = 0
+                      if (isNote) {
+                        const jp = jianpuForMidi(event.note.midi + transpose, sig.preferFlats)
+                        degree = String(jp.degree)
+                        accidental = jp.accidental
+                        octave = jp.octave
+                      }
+                      return (
+                        <g key={isNote ? event.note.id : `rest-${eventIndex}`}>
+                          {Array.from({ length: Math.abs(octave) }).map((_, dotIndex) => (
+                            <circle
+                              key={`oct-${dotIndex}`}
+                              cx={x}
+                              cy={octave > 0 ? 10 - dotIndex * 4 : 34 + dotIndex * 4}
+                              r={1.5}
+                              fill="#b45309"
+                            />
+                          ))}
+                          {accidental && (
+                            <text
+                              x={x - fs * 0.4}
+                              y={NUMBER_Y}
+                              textAnchor="end"
+                              fontSize={fs * 0.55}
+                              fill="#b45309"
+                            >
+                              {accidental}
+                            </text>
+                          )}
+                          <text
+                            x={x}
+                            y={NUMBER_Y}
+                            textAnchor="middle"
+                            fontSize={fs}
+                            fontWeight={650}
+                            fill={color}
+                            fontFamily="Inter, 'Noto Sans SC', sans-serif"
+                          >
+                            {degree}
+                          </text>
+                          {dotted && <circle cx={x + fs * 0.4} cy={NUMBER_Y - 5} r={1.6} fill={color} />}
+                          {Array.from({ length: dashes }).map((_, dashIndex) => (
+                            <line
+                              key={`dash-${dashIndex}`}
+                              x1={x + (dashIndex + 1) * BEAT_WIDTH - 4}
+                              x2={x + (dashIndex + 1) * BEAT_WIDTH + 4}
+                              y1={NUMBER_Y - 4}
+                              y2={NUMBER_Y - 4}
+                              stroke="#9ca3af"
+                              strokeWidth={1.5}
+                              strokeLinecap="round"
+                            />
+                          ))}
+                          {showTab && isNote && fingerings[event.index] && (
+                            <text
+                              x={x}
+                              y={LINE_HEIGHT - 8}
+                              textAnchor="middle"
+                              fontSize={9}
+                              fill={
+                                fingerings[event.index].breath === 'blow' ? '#2563eb' : '#dc2626'
+                              }
+                            >
+                              {fingerings[event.index].hole}
+                              {fingerings[event.index].breath === 'blow' ? '↑' : '↓'}
+                              {fingerings[event.index].slide ? '+' : ''}
+                            </text>
+                          )}
+                        </g>
+                      )
+                    })}
+                    {groups.map((beamGroup, groupIndex) => {
+                      const maxLevel = Math.max(...beamGroup.map(event => beamLevel(event.duration)))
+                      return Array.from({ length: maxLevel }).map((_, levelIndex) => {
+                        const level = levelIndex + 1
+                        const matching = beamGroup.filter(event => beamLevel(event.duration) >= level)
+                        if (matching.length === 0) return null
+                        const first = xOf(matching[0], measureIndex, measureStart) - 7
+                        const last = xOf(matching[matching.length - 1], measureIndex, measureStart) + 7
+                        return (
+                          <line
+                            key={`beam-${groupIndex}-${level}`}
+                            x1={first}
+                            x2={last}
+                            y1={BEAM_Y + levelIndex * 4}
+                            y2={BEAM_Y + levelIndex * 4}
+                            stroke="#1f2933"
+                            strokeWidth={level === 1 ? 1.7 : 1.5}
+                            strokeLinecap="round"
+                          />
+                        )
+                      })
+                    })}
+                    {measureIndex === lineMeasures.length - 1 && (
+                      <line
+                        x1={measureX + measureWidth}
+                        y1={8}
+                        x2={measureX + measureWidth}
+                        y2={lineHeight - 12}
+                        stroke="#d6d3d1"
+                        strokeWidth={1}
+                      />
+                    )}
+                  </g>
+                )
+              })}
+            </g>
+          )
+        })}
+      </svg>
     </div>
   )
 }
