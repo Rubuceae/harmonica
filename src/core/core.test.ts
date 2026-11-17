@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { demoScore } from './demo'
+import { BUILTIN_SONGS } from './songs'
 import { jianpuForMidi, parseJianpu } from './jianpu'
 import { keySignatureFor } from './keys'
 import { buildLayout, fingeringsForMidi } from './layout'
@@ -78,5 +79,13 @@ describe('demo lyrics', () => {
     expect(score.notes[0].lyrics).toEqual(['一', '一'])
     expect(score.composer).toBe('传统 曲')
     expect(score.slurs?.length).toBeGreaterThan(0)
+  })
+})
+
+describe('song library', () => {
+  it('includes the built-in songs and the 起风了 reference', () => {
+    expect(BUILTIN_SONGS.map(song => song.title)).toEqual(['小星星', '时值示例', '起风了'])
+    expect(BUILTIN_SONGS[2].kind).toBe('reference')
+    expect(BUILTIN_SONGS[2].svgUrl).toBe('/songs/qifengle.svg')
   })
 })

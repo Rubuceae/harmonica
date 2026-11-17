@@ -7,7 +7,6 @@ type Props = {
   score: Score
   transpose: number
   sig: KeySignature
-  hardSpotIds: Set<string>
   fingerings: Fingering[]
   showTab: boolean
 }
@@ -19,9 +18,9 @@ const MAX_TOKENS = 26
 const MAX_MEASURES = 6
 const MEASURE_PAD = 8
 const NOTE_BASE = 22
-const NOTE_FONT = 22
-const LYRIC_FONT = 14
-const LYRIC_OFFSET = 28
+const NOTE_FONT = 20
+const LYRIC_FONT = 12.5
+const LYRIC_OFFSET = 30
 const LYRIC_GAP = 18
 
 const COL_W = Math.max(
@@ -119,7 +118,7 @@ type LineLayout = {
   baseline: number
 }
 
-export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, showTab }: Props) {
+export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props) {
   const [beats, beatType] = score.timeSignature
   const measureBeats = (beats * 4) / beatType
   const measures = buildMeasures(score.notes, measureBeats)
@@ -141,7 +140,7 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
   }
   if (current.length > 0) lines.push(current)
 
-  const lineHeight = 68 + verseCount * 8 + (showTab ? 12 : 0)
+  const lineHeight = 74 + verseCount * 10 + (showTab ? 12 : 0)
   const lineLayouts: LineLayout[] = lines.map((line, lineIndex) => ({
     line,
     widths: line.map(measure => MEASURE_PAD * 2 + measure.tokens.length * COL_W),
@@ -166,7 +165,7 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
   })
 
   const title = score.title || '未命名'
-  const titleSize = Math.min(30, 800 / Math.max(1, title.length))
+  const titleSize = Math.min(28, 800 / Math.max(1, title.length))
   const originalLabel = keySignatureFor(score.originalKey).label
 
   return (
@@ -174,34 +173,34 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
       <svg
         viewBox={`0 0 ${W} ${height}`}
         style={{ width: '100%', height: 'auto', display: 'block' }}
-        fontFamily="PingFang SC, Microsoft YaHei, Noto Sans, Source Han Serif SC, sans-serif"
+        fontFamily={'"PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Noto Sans", sans-serif'}
         role="img"
         aria-label="简谱"
       >
         <rect x={0} y={0} width={W} height={height} fill="#f0fdfa" />
-        <text x={W / 2} y={34} textAnchor="middle" fontSize={titleSize} fill="#0ea5e9">
+        <text x={W / 2} y={34} textAnchor="middle" fontSize={titleSize} fontWeight={500} fill="#0ea5e9">
           {title}
         </text>
         {score.composer && (
-          <text x={960} y={62} textAnchor="end" fontSize={12} fill="#475569">
+          <text x={960} y={62} textAnchor="end" fontSize={11.5} fill="#475569">
             {score.composer}
           </text>
         )}
         {score.lyricist && (
-          <text x={960} y={78} textAnchor="end" fontSize={12} fill="#475569">
+          <text x={960} y={78} textAnchor="end" fontSize={11.5} fill="#475569">
             {score.lyricist}
           </text>
         )}
-        <text x={40} y={64} fontSize={15} fill="#475569">
+        <text x={40} y={64} fontSize={14} fill="#475569">
           1=C
         </text>
-        <text x={40} y={86} fontSize={12} fill="#475569">
+        <text x={40} y={86} fontSize={11.5} fill="#475569">
           {beats}/{beatType}
         </text>
-        <text x={40} y={106} fontSize={12} fill="#475569">
+        <text x={40} y={104} fontSize={11.5} fill="#475569">
           ♩ = {score.tempo}
         </text>
-        <text x={40} y={126} fontSize={10.5} fill="#475569">
+        <text x={40} y={120} fontSize={10} fill="#475569">
           原调 {originalLabel} · 当前 {sig.label}
         </text>
 
@@ -272,7 +271,6 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
                         )
                       }
                       const jp = jianpuForMidi(token.note.midi + transpose, sig.preferFlats)
-                      const hard = hardSpotIds.has(token.note.id)
                       return (
                         <g key={token.note.id}>
                           {Array.from({ length: Math.abs(jp.octave) }).map((_, dotIndex) => (
@@ -281,20 +279,21 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
                               cx={x}
                               cy={
                                 jp.octave > 0
-                                  ? layout.baseline - 26 - dotIndex * 4
-                                  : layout.baseline + 4 + dotIndex * 4
+                                  ? layout.baseline - 26 - dotIndex * 4.5
+                                  : layout.baseline + 4 + dotIndex * 4.5
                               }
-                              r={1.6}
+                              r={2.2}
                               fill="#0f172a"
                             />
                           ))}
                           {jp.accidental && (
                             <text
-                              x={x - NOTE_FONT * 0.42}
+                              x={x - NOTE_FONT * 0.5}
                               y={layout.baseline}
                               textAnchor="end"
-                              fontSize={NOTE_FONT * 0.55}
-                              fill="#0f172a"
+                              fontSize={NOTE_FONT * 0.7}
+                              fontWeight={600}
+                              fill="#b45309"
                             >
                               {jp.accidental}
                             </text>
@@ -304,6 +303,7 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
                             y={layout.baseline}
                             textAnchor="middle"
                             fontSize={NOTE_FONT}
+                            fontWeight={600}
                             fill="#0f172a"
                           >
                             {jp.degree}
@@ -312,7 +312,7 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
                             <circle
                               cx={x + NOTE_FONT * 0.38}
                               cy={layout.baseline - 5}
-                              r={1.8}
+                              r={2}
                               fill="#0f172a"
                             />
                           )}
@@ -324,7 +324,7 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
                                 y={layout.baseline + LYRIC_OFFSET + verseIndex * LYRIC_GAP}
                                 textAnchor="middle"
                                 fontSize={LYRIC_FONT}
-                                fill="#475569"
+                                fill="#334155"
                               >
                                 {syllable}
                               </text>
@@ -349,14 +349,6 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
                               {fingerings[token.index].breath === 'blow' ? '↑' : '↓'}
                               {fingerings[token.index].slide ? '+' : ''}
                             </text>
-                          )}
-                          {hard && (
-                            <circle
-                              cx={x + 9}
-                              cy={layout.baseline - 18}
-                              r={2.2}
-                              fill="#f97316"
-                            />
                           )}
                         </g>
                       )
@@ -390,10 +382,10 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
                             key={`beam-${groupIndex}-${level}`}
                             x1={firstX}
                             x2={lastX}
-                            y1={layout.baseline + 11 + levelIndex * 4}
-                            y2={layout.baseline + 11 + levelIndex * 4}
+                            y1={layout.baseline + 16 + levelIndex * 4}
+                            y2={layout.baseline + 16 + levelIndex * 4}
                             stroke="#0f172a"
-                            strokeWidth={1.6}
+                            strokeWidth={1.8}
                             strokeLinecap="round"
                           />
                         )
@@ -422,15 +414,15 @@ export function JianpuView({ score, transpose, sig, hardSpotIds, fingerings, sho
           if (!from || !to || from.lineIndex !== to.lineIndex || from.x === to.x) return null
           const x1 = from.x
           const x2 = to.x
-          const y = from.baseline - 28
-          const lift = Math.min(8, Math.max(5, Math.abs(x2 - x1) * 0.06))
+          const y = from.baseline - 40
+          const lift = Math.min(6, Math.max(4, Math.abs(x2 - x1) * 0.05))
           return (
             <path
               key={`slur-${slurIndex}`}
               d={`M ${x1} ${y} Q ${(x1 + x2) / 2} ${y - lift} ${x2} ${y}`}
               fill="none"
               stroke="#0f172a"
-              strokeWidth={1.2}
+              strokeWidth={1.4}
               strokeLinecap="round"
             />
           )

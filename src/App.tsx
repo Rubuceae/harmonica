@@ -9,6 +9,7 @@ import { attachLyrics, parseJianpu } from './core/jianpu'
 import { MAJOR_NAMES, keySignatureFor, transposeKey } from './core/keys'
 import { LAYOUTS, buildLayout, type LayoutId } from './core/layout'
 import { MODE_WEIGHTS, evaluate, recommend, type ModeKey } from './core/optimize'
+import { BUILTIN_SONGS, loadSavedSongs, newSongId, saveSongs, type SongEntry } from './core/songs'
 import type { KeyMode, Score } from './core/types'
 import { loadMusicXmlFile, parseMusicXml } from './io/musicxml'
 
@@ -27,6 +28,10 @@ export default function App() {
   const parsedT = Number(params.get('t') ?? 0)
   const initialT = Number.isFinite(parsedT) ? Math.max(-12, Math.min(12, parsedT)) : 0
   const isDurationDemo = params.get('demo') === 'duration'
+  const initialReference =
+    params.get('song') === 'qifengle'
+      ? BUILTIN_SONGS.find(song => song.id === 'builtin-qifengle') ?? null
+      : null
   const initialScore = isDurationDemo
     ? parseJianpu(DURATION_DEMO, 96, { tonic: 0, mode: 'major' }, '时值示例')
     : demoScore()
@@ -46,6 +51,14 @@ export default function App() {
     importParam === 'image' ? 'image' : importParam === 'musicxml' ? 'musicxml' : 'jianpu',
   )
   const [imageTitle, setImageTitle] = useState('')
+  const [songsOpen, setSongsOpen] = useState(params.get('songs') === '1')
+  const [savedSongs, setSavedSongs] = useState<SongEntry[]>(() => loadSavedSongs())
+  const [currentSongId, setCurrentSongId] = useState(
+    initialReference ? 'builtin-qifengle' : isDurationDemo ? 'builtin-duration' : 'builtin-little-star',
+  )
+  const [songTitleDraft, setSongTitleDraft] = useState('')
+  const [referenceSong, setReferenceSong] = useState<SongEntry | null>(initialReference)
+  const [referenceError, setReferenceError] = useState(false)
   const [jianpuDraft, setJianpuDraft] = useState(DEMO_JIANPU)
   const [titleDraft, setTitleDraft] = useState(isDurationDemo ? '时值示例' : '小星星')
   const [lyricsDraft, setLyricsDraft] = useState(isDurationDemo ? '' : DEMO_LYRICS)
@@ -75,8 +88,44 @@ export default function App() {
     [result],
   )
 
+  const allSongs = [...BUILTIN_SONGS, ...savedSongs]
+
   const signedT = transposition > 0 ? `+${transposition}` : String(transposition)
   const anchor = layout.id === 'standard12' ? 'C5（第三间）' : 'C4（下加一线）'
+
+  const selectSong = (song: SongEntry) => {
+    setReferenceError(false)
+    setCurrentSongId(song.id)
+    if (song.kind === 'reference') {
+      setReferenceSong(song)
+      setSongsOpen(false)
+      return
+    }
+    if (!song.score) return
+    setReferenceSong(null)
+    setScore(song.score)
+    setTransposition(0)
+    setView('jianpu')
+    setSongsOpen(false)
+    setImportOpen(false)
+  }
+
+  const saveCurrentSong = () => {
+    const title = songTitleDraft.trim() || score.title || '未命名'
+    const entry: SongEntry = { id: newSongId(), title, kind: 'score', score }
+    const next = [...savedSongs, entry]
+    setSavedSongs(next)
+    saveSongs(next)
+    setCurrentSongId(entry.id)
+    setSongTitleDraft('')
+  }
+
+  const deleteSong = (id: string) => {
+    const next = savedSongs.filter(song => song.id !== id)
+    setSavedSongs(next)
+    saveSongs(next)
+    if (currentSongId === id) setCurrentSongId('')
+  }
 
   const applyJianpu = () => {
     setImportError('')
@@ -102,6 +151,8 @@ export default function App() {
         composer: composerDraft.trim() || undefined,
         lyricist: lyricistDraft.trim() || undefined,
       })
+      setReferenceSong(null)
+      setCurrentSongId('')
       setTransposition(0)
       setView('jianpu')
       setImportOpen(false)
@@ -117,6 +168,8 @@ export default function App() {
     try {
       const parsed = await loadMusicXmlFile(file)
       setScore(parsed)
+      setReferenceSong(null)
+      setCurrentSongId('')
       setTransposition(0)
       setView('jianpu')
       setImportStatus('')
@@ -153,6 +206,8 @@ export default function App() {
       }
       const parsed = parseMusicXml(payload, imageTitle.trim() || file.name.replace(/\.[^.]+$/, ''))
       setScore(parsed)
+      setReferenceSong(null)
+      setCurrentSongId('')
       setTransposition(0)
       setView('jianpu')
       setImportStatus('')
@@ -215,15 +270,68 @@ export default function App() {
           显示孔位（简谱）
         </label>
         <button
+          className="ghost"
+          onClick={() => {
+            setSongsOpen(open => !open)
+            setImportOpen(false)
+          }}
+        >
+          {songsOpen ? '收起歌曲' : '歌曲'}
+        </button>
+        <button
           className="import-button"
           onClick={() => {
             setImportOpen(open => !open)
+            setSongsOpen(false)
             setImportError('')
           }}
         >
           {importOpen ? '收起导入' : '导入乐谱'}
         </button>
       </div>
+
+      {songsOpen && (
+        <section className="panel song-panel">
+          <div className="panel-head">
+            <div>
+              <h3>歌曲管理</h3>
+              <p className="muted small">选择内置或保存的歌曲；导入的乐谱可以保存到这里。</p>
+            </div>
+            <button className="ghost" onClick={() => setSongsOpen(false)}>
+              关闭
+            </button>
+          </div>
+          {!referenceSong && (
+            <div className="song-save">
+              <input
+                type="text"
+                placeholder={`保存为：${score.title}`}
+                value={songTitleDraft}
+                onChange={event => setSongTitleDraft(event.target.value)}
+              />
+              <button onClick={saveCurrentSong}>保存当前乐谱</button>
+            </div>
+          )}
+          <ul className="song-list">
+            {allSongs.map(song => (
+              <li key={song.id} className={currentSongId === song.id ? 'active' : ''}>
+                <button className="song-main" onClick={() => selectSong(song)}>
+                  <span className="song-title">{song.title}</span>
+                  <span className="song-kind">{song.kind === 'reference' ? '参考谱' : '可优化'}</span>
+                </button>
+                {!song.builtin && (
+                  <button className="ghost song-delete" onClick={() => deleteSong(song.id)}>
+                    删除
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="hint">
+            「起风了」是本地参考谱（来自你下载的页面），只显示谱面；要优化 / 移调请导入 MusicXML 或简谱。
+          </p>
+        </section>
+      )}
 
       {importOpen && (
         <section className="panel import-panel">
@@ -474,14 +582,37 @@ export default function App() {
           </details>
         </aside>
 
-        <section className={`panel score-panel${view === 'jianpu' ? ' jianpu-panel' : ''}`}>
-          {result ? (
+        <section
+          className={`panel score-panel${
+            referenceSong ? ' reference-panel' : view === 'jianpu' ? ' jianpu-panel' : ''
+          }`}
+        >
+          {referenceSong ? (
+            <div className="reference-score">
+              <div className="reference-head">
+                <span className="badge">参考谱</span>
+                <a href={referenceSong.svgUrl} target="_blank" rel="noreferrer">
+                  打开 SVG
+                </a>
+              </div>
+              {referenceError ? (
+                <p className="hint">
+                  参考谱文件未找到：public/songs/qifengle.svg（本地文件，未提交）。
+                </p>
+              ) : (
+                <img
+                  src={referenceSong.svgUrl}
+                  alt={`${referenceSong.title} 参考谱`}
+                  onError={() => setReferenceError(true)}
+                />
+              )}
+            </div>
+          ) : result ? (
             view === 'jianpu' ? (
               <JianpuView
                 score={score}
                 transpose={transposition}
                 sig={currentSig}
-                hardSpotIds={hardSpotIds}
                 fingerings={result.fingerings}
                 showTab={showTab}
               />
@@ -522,15 +653,27 @@ export default function App() {
         </section>
       </main>
 
-      <div className="lower-grid">
-        <MetricsPanel result={result} />
-        <RecommendationTable
-          recommendations={recommendations}
-          current={transposition}
-          onSelect={setTransposition}
-        />
-        <HardSpotList result={result} />
-      </div>
+      {referenceSong ? (
+        <div className="lower-grid">
+          <section className="panel reference-note">
+            <h3>参考谱只读</h3>
+            <p className="muted small">
+              这首歌是从本地保存的站点谱面导入的，只有 SVG 图像，没有解析成音符；优化器和难点报告不适用。
+            </p>
+            <p className="muted small">要用移调 / 优化，请用 MusicXML 或简谱导入同一首歌。</p>
+          </section>
+        </div>
+      ) : (
+        <div className="lower-grid">
+          <MetricsPanel result={result} />
+          <RecommendationTable
+            recommendations={recommendations}
+            current={transposition}
+            onSelect={setTransposition}
+          />
+          <HardSpotList result={result} />
+        </div>
+      )}
 
       <footer>
         <span>固定 1=C · 12 孔 C 半音阶（tenor 默认）· 标准 12 孔 / 16 孔可切换</span>
