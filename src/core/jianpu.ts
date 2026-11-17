@@ -40,10 +40,11 @@ export function parseJianpu(
   tempo: number,
   originalKey: KeyInfo,
   title = '未命名',
+  timeSignature: [number, number] = [4, 4],
 ): Score {
   const tokens = input.replace(/\|/g, ' | ').trim().split(/\s+/).filter(Boolean)
   const notes: NoteEvent[] = []
-  const beatsPerMeasure = 4
+  const beatsPerMeasure = (timeSignature[0] * 4) / timeSignature[1]
   let beat = 0
 
   for (const token of tokens) {
@@ -74,5 +75,5 @@ export function parseJianpu(
     beat += duration
   }
 
-  return { title, tempo, timeSignature: [4, 4], originalKey, notes }
+  return { title, tempo, timeSignature, originalKey, notes }
 }

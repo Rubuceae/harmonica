@@ -8,6 +8,7 @@ type Props = {
   notes: NoteEvent[]
   transpose: number
   sig: KeySignature
+  timeSignature: [number, number]
   hardSpotIds: Set<string>
 }
 
@@ -22,7 +23,7 @@ function durationToVex(duration: number): { duration: string; dots: number } {
   return { duration: '16', dots: 0 }
 }
 
-export function StaffView({ notes, transpose, sig, hardSpotIds }: Props) {
+export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export function StaffView({ notes, transpose, sig, hardSpotIds }: Props) {
         if (indexInSystem === 0) {
           stave.addClef('treble')
           stave.addKeySignature(sig.name)
-          if (measure === 1) stave.addTimeSignature('4/4')
+          if (measure === 1) stave.addTimeSignature(`${timeSignature[0]}/${timeSignature[1]}`)
           stave.setBegBarType(Barline.type.SINGLE)
         } else {
           stave.setBegBarType(Barline.type.NONE)
@@ -110,7 +111,7 @@ export function StaffView({ notes, transpose, sig, hardSpotIds }: Props) {
       window.removeEventListener('resize', onResize)
       window.clearTimeout(timer)
     }
-  }, [notes, transpose, sig, hardSpotIds])
+  }, [notes, transpose, sig, timeSignature, hardSpotIds])
 
   return <div className="staff" ref={containerRef} />
 }

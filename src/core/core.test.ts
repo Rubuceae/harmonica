@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { demoScore } from './demo'
-import { jianpuForMidi } from './jianpu'
+import { jianpuForMidi, parseJianpu } from './jianpu'
 import { keySignatureFor } from './keys'
 import { buildLayout, fingeringsForMidi } from './layout'
 import { MODE_WEIGHTS, evaluate } from './optimize'
@@ -34,6 +34,11 @@ describe('jianpu', () => {
     expect(jianpuForMidi(66, false).text).toBe('#4')
     expect(jianpuForMidi(72, false).text).toBe('1')
     expect(jianpuForMidi(72, false).octave).toBe(1)
+  })
+
+  it('respects 3/4 measure length', () => {
+    const score = parseJianpu('1 1 1 | 2 2 2', 120, { tonic: 0, mode: 'major' }, 'test', [3, 4])
+    expect(score.notes[3].measure).toBe(2)
   })
 })
 

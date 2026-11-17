@@ -4,10 +4,13 @@ import { JianpuView } from './components/JianpuView'
 import { MetricsPanel } from './components/MetricsPanel'
 import { RecommendationTable } from './components/RecommendationTable'
 import { StaffView } from './components/StaffView'
-import { demoScore } from './core/demo'
-import { keySignatureFor, transposeKey } from './core/keys'
+import { DEMO_JIANPU, demoScore } from './core/demo'
+import { parseJianpu } from './core/jianpu'
+import { MAJOR_NAMES, keySignatureFor, transposeKey } from './core/keys'
 import { LAYOUTS, buildLayout, type LayoutId } from './core/layout'
 import { MODE_WEIGHTS, evaluate, recommend, type ModeKey } from './core/optimize'
+import type { KeyMode, Score } from './core/types'
+import { loadMusicXmlFile } from './io/musicxml'
 
 const MODE_LABELS: Record<ModeKey, string> = {
   air: '气息优先',
@@ -23,11 +26,21 @@ export default function App() {
   const initialT = Number.isFinite(parsedT) ? Math.max(-12, Math.min(12, parsedT)) : 0
 
   const [layoutId, setLayoutId] = useState<LayoutId>('tenor12')
-  const [score] = useState(() => demoScore())
+  const [score, setScore] = useState<Score>(() => demoScore())
   const [transposition, setTransposition] = useState(initialT)
   const [mode, setMode] = useState<ModeKey>('air')
   const [view, setView] = useState<'jianpu' | 'staff'>(initialView)
   const [showTab, setShowTab] = useState(params.get('tab') === '1')
+
+  const [importOpen, setImportOpen] = useState(params.get('import') === '1')
+  const [importTab, setImportTab] = useState<'jianpu' | 'musicxml'>('jianpu')
+  const [jianpuDraft, setJianpuDraft] = useState(DEMO_JIANPU)
+  const [keyTonic, setKeyTonic] = useState(2)
+  const [keyMode, setKeyMode] = useState<KeyMode>('major')
+  const [tempoDraft, setTempoDraft] = useState(96)
+  const [timeDraft, setTimeDraft] = useState<[number, number]>([4, 4])
+  const [importError, setImportError] = useState('')
+  const [importStatus, setImportStatus] = useState('')
 
   const layout = useMemo(() => buildLayout(layoutId), [layoutId])
   const weights = MODE_WEIGHTS[mode]
@@ -48,6 +61,46 @@ export default function App() {
 
   const signedT = transposition > 0 ? `+${transposition}` : String(transposition)
   const anchor = layout.id === 'standard12' ? 'C5（第三间）' : 'C4（下加一线）'
+
+  const applyJianpu = () => {
+    setImportError('')
+    try {
+      const tempo = Number.isFinite(tempoDraft) ? Math.max(30, Math.min(240, tempoDraft)) : 96
+      const parsed = parseJianpu(
+        jianpuDraft,
+        tempo,
+        { tonic: keyTonic, mode: keyMode },
+        '导入的简谱',
+        timeDraft,
+      )
+      if (parsed.notes.length === 0) {
+        throw new Error('没有解析到音符，检查一下数字 / 升降号 / 八度点。')
+      }
+      setScore(parsed)
+      setTransposition(0)
+      setView('jianpu')
+      setImportOpen(false)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const onMusicXmlFile = async (file: File | undefined) => {
+    if (!file) return
+    setImportError('')
+    setImportStatus(`正在解析 ${file.name}…`)
+    try {
+      const parsed = await loadMusicXmlFile(file)
+      setScore(parsed)
+      setTransposition(0)
+      setView('jianpu')
+      setImportStatus('')
+      setImportOpen(false)
+    } catch (error) {
+      setImportStatus('')
+      setImportError(error instanceof Error ? error.message : String(error))
+    }
+  }
 
   return (
     <div className="app">
@@ -95,7 +148,131 @@ export default function App() {
           <input type="checkbox" checked={showTab} onChange={event => setShowTab(event.target.checked)} />
           显示孔位（简谱）
         </label>
+        <button
+          className="import-button"
+          onClick={() => {
+            setImportOpen(open => !open)
+            setImportError('')
+          }}
+        >
+          {importOpen ? '收起导入' : '导入乐谱'}
+        </button>
       </div>
+
+      {importOpen && (
+        <section className="panel import-panel">
+          <div className="panel-head">
+            <h3>导入 / 编辑乐谱</h3>
+            <button
+              className="ghost"
+              onClick={() => {
+                setImportOpen(false)
+                setImportError('')
+              }}
+            >
+              关闭
+            </button>
+          </div>
+
+          <div className="segmented" role="group" aria-label="导入格式">
+            <button
+              className={importTab === 'jianpu' ? 'active' : ''}
+              onClick={() => {
+                setImportTab('jianpu')
+                setImportError('')
+              }}
+            >
+              简谱文本
+            </button>
+            <button
+              className={importTab === 'musicxml' ? 'active' : ''}
+              onClick={() => {
+                setImportTab('musicxml')
+                setImportError('')
+              }}
+            >
+              MusicXML
+            </button>
+          </div>
+
+          {importTab === 'jianpu' ? (
+            <div className="import-grid">
+              <label className="import-text">
+                简谱
+                <textarea
+                  value={jianpuDraft}
+                  onChange={event => setJianpuDraft(event.target.value)}
+                  rows={7}
+                  spellCheck={false}
+                />
+              </label>
+              <div className="import-settings">
+                <label>
+                  原调
+                  <select value={keyTonic} onChange={event => setKeyTonic(Number(event.target.value))}>
+                    {MAJOR_NAMES.map((name, index) => (
+                      <option value={index} key={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  调式
+                  <select value={keyMode} onChange={event => setKeyMode(event.target.value as KeyMode)}>
+                    <option value="major">大调</option>
+                    <option value="minor">小调</option>
+                  </select>
+                </label>
+                <label>
+                  速度
+                  <input
+                    type="number"
+                    min={30}
+                    max={240}
+                    value={tempoDraft}
+                    onChange={event => setTempoDraft(Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  拍号
+                  <select
+                    value={`${timeDraft[0]}/${timeDraft[1]}`}
+                    onChange={event => {
+                      const [beats, beatType] = event.target.value.split('/').map(Number)
+                      setTimeDraft([beats, beatType])
+                    }}
+                  >
+                    <option value="4/4">4/4</option>
+                    <option value="3/4">3/4</option>
+                    <option value="2/4">2/4</option>
+                  </select>
+                </label>
+                <div className="import-actions">
+                  <button onClick={applyJianpu}>应用简谱</button>
+                  <button className="ghost" onClick={() => setJianpuDraft(DEMO_JIANPU)}>
+                    恢复示例
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="import-xml">
+              <input
+                type="file"
+                accept=".xml,.musicxml,.mxl,application/xml,text/xml"
+                onChange={event => onMusicXmlFile(event.target.files?.[0])}
+              />
+              <p className="hint">
+                支持 .xml / .musicxml / .mxl；取第一个 part 的最高音旋律。解析失败会显示原因。
+              </p>
+            </div>
+          )}
+
+          {importStatus && <p className="muted small">{importStatus}</p>}
+          {importError && <p className="error">{importError}</p>}
+        </section>
+      )}
 
       <main className="main-grid">
         <aside className="panel controls">
@@ -144,7 +321,8 @@ export default function App() {
             <div>
               <h2>{score.title}</h2>
               <p>
-                {score.tempo} BPM · 4/4 · 原调 {originalSig.label} · 当前 {currentSig.label}（{signedT}）
+                {score.tempo} BPM · {score.timeSignature[0]}/{score.timeSignature[1]} · 原调{' '}
+                {originalSig.label} · 当前 {currentSig.label}（{signedT}）
               </p>
             </div>
             <div className="legend">
@@ -175,6 +353,7 @@ export default function App() {
                 notes={score.notes}
                 transpose={transposition}
                 sig={currentSig}
+                timeSignature={score.timeSignature}
                 hardSpotIds={hardSpotIds}
               />
             )
