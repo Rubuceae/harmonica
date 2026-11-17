@@ -35,6 +35,14 @@ export function jianpuForMidi(midi: number, preferFlats: boolean): JianpuNote {
   return { text: `${acc}${degree}`, accidental: acc, degree, octave }
 }
 
+function durationFromMarks(marks: string): number {
+  const underlines = (marks.match(/_/g) ?? []).length
+  const dots = (marks.match(/\./g) ?? []).length
+  let duration = Math.pow(0.5, underlines)
+  if (dots > 0) duration *= 1.5
+  return duration
+}
+
 export function parseJianpu(
   input: string,
   tempo: number,
@@ -46,23 +54,35 @@ export function parseJianpu(
   const notes: NoteEvent[] = []
   const beatsPerMeasure = (timeSignature[0] * 4) / timeSignature[1]
   let beat = 0
+  let lastWasRest = false
 
   for (const token of tokens) {
     if (token === '|') continue
     if (token === '-') {
-      if (notes.length > 0) notes[notes.length - 1].duration += 1
-      beat += 1
+      if (lastWasRest) {
+        beat += 1
+      } else if (notes.length > 0) {
+        notes[notes.length - 1].duration += 1
+        beat += 1
+      }
       continue
     }
 
-    const match = token.match(/^([#b]?)([1-7])([',]*)([_.]?)$/)
+    const restMatch = token.match(/^0([_.]*)$/)
+    if (restMatch) {
+      beat += durationFromMarks(restMatch[1])
+      lastWasRest = true
+      continue
+    }
+
+    const match = token.match(/^([#b]?)([1-7])([',]*)([_.]*)$/)
     if (!match) continue
     const [, acc, digit, octaveMarks, durMark] = match
     const degree = Number(digit)
     const octave = (octaveMarks.match(/'/g)?.length ?? 0) - (octaveMarks.match(/,/g)?.length ?? 0)
     const semitone = DEGREE_SEMITONES[degree - 1] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0)
     const midi = 60 + 12 * octave + semitone
-    const duration = durMark === '_' ? 0.5 : durMark === '.' ? 1.5 : 1
+    const duration = durationFromMarks(durMark)
 
     notes.push({
       id: `n${notes.length}`,
@@ -73,6 +93,7 @@ export function parseJianpu(
       beatInMeasure: beat % beatsPerMeasure,
     })
     beat += duration
+    lastWasRest = false
   }
 
   return { title, tempo, timeSignature, originalKey, notes }

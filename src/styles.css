@@ -326,7 +326,7 @@ input[type="range"] {
   position: relative;
   display: flex;
   border-right: 1px solid var(--line);
-  padding: 14px 10px 8px;
+  padding: 16px 10px 8px;
 }
 
 .measure:last-child {
@@ -346,58 +346,114 @@ input[type="range"] {
   align-items: flex-start;
 }
 
-.jianpu-note {
-  width: 44px;
-  text-align: center;
-  border-radius: 10px;
-  padding: 2px 0 4px;
+.jp-event {
+  flex: 0 0 auto;
+  padding: 2px 3px;
+  border-radius: 8px;
 }
 
-.jianpu-note.hard {
+.jp-event.short {
+  padding: 2px 1px;
+}
+
+.jp-event.short .degree {
+  font-size: 22px;
+}
+
+.jp-event.tiny .degree {
+  font-size: 19px;
+}
+
+.jp-event.short .acc {
+  font-size: 11px;
+}
+
+.jp-event.hard {
   background: #fff1e6;
   outline: 1px solid #fdba74;
 }
 
+.jp-event.rest {
+  color: var(--muted);
+}
+
+.jp-row {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+}
+
 .jp-main {
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: 34px;
+  align-items: center;
 }
 
 .degree {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 650;
   line-height: 1;
   letter-spacing: -0.02em;
 }
 
 .acc {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--accent);
-  margin-top: -2px;
   margin-right: 1px;
 }
 
-.octave-dots {
+.dot-mark {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink);
+  margin-left: 1px;
+  transform: translateY(-2px);
+}
+
+.jp-dashes {
+  flex: 1;
+  display: flex;
+  justify-content: space-around;
+  padding: 0 2px;
+}
+
+.dash {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.jp-above,
+.jp-below {
   height: 10px;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 10px;
   color: var(--accent);
 }
 
-.duration {
-  height: 14px;
-  font-size: 12px;
-  line-height: 14px;
-  color: #a8a29e;
-  letter-spacing: -1px;
+.jp-event.rest .jp-above,
+.jp-event.rest .jp-below {
+  color: transparent;
 }
 
-.duration.eighth {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+.jp-underlines {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 3px;
+  min-height: 4px;
+}
+
+.jp-underlines .underline {
+  width: 18px;
+  height: 1.5px;
+  background: var(--ink);
+  border-radius: 1px;
+}
+
+.jp-event.rest .jp-underlines .underline {
+  background: var(--muted);
 }
 
 .tab {
@@ -405,6 +461,7 @@ input[type="range"] {
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.02em;
+  text-align: center;
 }
 
 .tab.blow {
@@ -413,6 +470,34 @@ input[type="range"] {
 
 .tab.draw {
   color: var(--draw);
+}
+
+.duration-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.legend-title {
+  align-self: center;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.legend-item > span {
+  font-size: 10px;
+  color: var(--muted);
 }
 
 .staff {
@@ -497,6 +582,7 @@ input[type="range"] {
 
 .import-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
 }
@@ -532,6 +618,14 @@ input[type="range"] {
 
 .import-xml input[type="file"] {
   font-size: 13px;
+}
+
+.import-xml input[type="text"] {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--ink);
 }
 
 .error {

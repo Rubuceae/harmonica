@@ -40,6 +40,17 @@ describe('jianpu', () => {
     const score = parseJianpu('1 1 1 | 2 2 2', 120, { tonic: 0, mode: 'major' }, 'test', [3, 4])
     expect(score.notes[3].measure).toBe(2)
   })
+
+  it('supports underlines, dots, and rests', () => {
+    const score = parseJianpu('1__ 1. 1._ 0 1', 120, { tonic: 0, mode: 'major' }, 'test')
+    expect(score.notes.map(note => note.duration)).toEqual([0.25, 1.5, 0.75, 1])
+    expect(score.notes[3].onset).toBe(3.5)
+  })
+
+  it('extends notes with dashes', () => {
+    const score = parseJianpu('1 - - -', 120, { tonic: 0, mode: 'major' }, 'test')
+    expect(score.notes[0].duration).toBe(4)
+  })
 })
 
 describe('optimizer', () => {

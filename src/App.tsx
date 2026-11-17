@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
 import { HardSpotList } from './components/HardSpotList'
-import { JianpuView } from './components/JianpuView'
+import { DurationLegend, JianpuView } from './components/JianpuView'
 import { MetricsPanel } from './components/MetricsPanel'
 import { RecommendationTable } from './components/RecommendationTable'
 import { StaffView } from './components/StaffView'
-import { DEMO_JIANPU, demoScore } from './core/demo'
+import { DEMO_JIANPU, DURATION_DEMO, demoScore } from './core/demo'
 import { parseJianpu } from './core/jianpu'
 import { MAJOR_NAMES, keySignatureFor, transposeKey } from './core/keys'
 import { LAYOUTS, buildLayout, type LayoutId } from './core/layout'
 import { MODE_WEIGHTS, evaluate, recommend, type ModeKey } from './core/optimize'
 import type { KeyMode, Score } from './core/types'
-import { loadMusicXmlFile } from './io/musicxml'
+import { loadMusicXmlFile, parseMusicXml } from './io/musicxml'
+
+const OMR_URL = 'http://localhost:8001/omr'
 
 const MODE_LABELS: Record<ModeKey, string> = {
   air: '气息优先',
@@ -24,16 +26,26 @@ export default function App() {
   const initialView = params.get('view') === 'staff' ? 'staff' : 'jianpu'
   const parsedT = Number(params.get('t') ?? 0)
   const initialT = Number.isFinite(parsedT) ? Math.max(-12, Math.min(12, parsedT)) : 0
+  const initialScore =
+    params.get('demo') === 'duration'
+      ? parseJianpu(DURATION_DEMO, 96, { tonic: 0, mode: 'major' }, '时值示例')
+      : demoScore()
 
   const [layoutId, setLayoutId] = useState<LayoutId>('tenor12')
-  const [score, setScore] = useState<Score>(() => demoScore())
+  const [score, setScore] = useState<Score>(() => initialScore)
   const [transposition, setTransposition] = useState(initialT)
   const [mode, setMode] = useState<ModeKey>('air')
   const [view, setView] = useState<'jianpu' | 'staff'>(initialView)
   const [showTab, setShowTab] = useState(params.get('tab') === '1')
 
-  const [importOpen, setImportOpen] = useState(params.get('import') === '1')
-  const [importTab, setImportTab] = useState<'jianpu' | 'musicxml'>('jianpu')
+  const importParam = params.get('import')
+  const [importOpen, setImportOpen] = useState(
+    importParam === '1' || importParam === 'image' || importParam === 'musicxml',
+  )
+  const [importTab, setImportTab] = useState<'jianpu' | 'musicxml' | 'image'>(
+    importParam === 'image' ? 'image' : importParam === 'musicxml' ? 'musicxml' : 'jianpu',
+  )
+  const [imageTitle, setImageTitle] = useState('')
   const [jianpuDraft, setJianpuDraft] = useState(DEMO_JIANPU)
   const [keyTonic, setKeyTonic] = useState(2)
   const [keyMode, setKeyMode] = useState<KeyMode>('major')
@@ -99,6 +111,47 @@ export default function App() {
     } catch (error) {
       setImportStatus('')
       setImportError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const onImageFile = async (file: File | undefined) => {
+    if (!file) return
+    setImportError('')
+    setImportStatus(`正在识别 ${file.name}…（本地 OMR，可能需要几十秒）`)
+    try {
+      const response = await fetch(OMR_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-Filename': file.name,
+        },
+        body: file,
+      })
+      const payload = await response.text()
+      if (!response.ok) {
+        let message = payload
+        try {
+          const parsed = JSON.parse(payload) as { error?: string }
+          if (parsed.error) message = parsed.error
+        } catch {
+          // keep raw payload
+        }
+        throw new Error(message || `OMR 服务返回 ${response.status}`)
+      }
+      const parsed = parseMusicXml(payload, imageTitle.trim() || file.name.replace(/\.[^.]+$/, ''))
+      setScore(parsed)
+      setTransposition(0)
+      setView('jianpu')
+      setImportStatus('')
+      setImportOpen(false)
+    } catch (error) {
+      setImportStatus('')
+      const message = error instanceof Error ? error.message : String(error)
+      setImportError(
+        message.includes('Failed to fetch') || message.includes('NetworkError')
+          ? '图片识别需要本地 OMR 服务：先在项目目录运行 `npm run omr`（需要 Audiveris）。'
+          : message,
+      )
     }
   }
 
@@ -193,6 +246,15 @@ export default function App() {
             >
               MusicXML
             </button>
+            <button
+              className={importTab === 'image' ? 'active' : ''}
+              onClick={() => {
+                setImportTab('image')
+                setImportError('')
+              }}
+            >
+              图片 OMR
+            </button>
           </div>
 
           {importTab === 'jianpu' ? (
@@ -250,13 +312,30 @@ export default function App() {
                 </label>
                 <div className="import-actions">
                   <button onClick={applyJianpu}>应用简谱</button>
-                  <button className="ghost" onClick={() => setJianpuDraft(DEMO_JIANPU)}>
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      setJianpuDraft(DEMO_JIANPU)
+                      setKeyTonic(2)
+                      setKeyMode('major')
+                    }}
+                  >
                     恢复示例
+                  </button>
+                  <button
+                    className="ghost"
+                    onClick={() => {
+                      setJianpuDraft(DURATION_DEMO)
+                      setKeyTonic(0)
+                      setKeyMode('major')
+                    }}
+                  >
+                    时值示例
                   </button>
                 </div>
               </div>
             </div>
-          ) : (
+          ) : importTab === 'musicxml' ? (
             <div className="import-xml">
               <input
                 type="file"
@@ -265,6 +344,24 @@ export default function App() {
               />
               <p className="hint">
                 支持 .xml / .musicxml / .mxl；取第一个 part 的最高音旋律。解析失败会显示原因。
+              </p>
+            </div>
+          ) : (
+            <div className="import-xml">
+              <input
+                type="text"
+                placeholder="曲名（可选，默认用文件名）"
+                value={imageTitle}
+                onChange={event => setImageTitle(event.target.value)}
+              />
+              <input
+                type="file"
+                accept=".png,.jpg,.jpeg,.tif,.tiff,.pdf,image/*,application/pdf"
+                onChange={event => onImageFile(event.target.files?.[0])}
+              />
+              <p className="hint">
+                本地 OMR：先在项目目录运行 <code>npm run omr</code>（需要 Audiveris 5.x）。
+                支持印刷体五线谱图片 / PDF；简谱图片暂不支持；曲名默认用文件名。
               </p>
             </div>
           )}
@@ -340,14 +437,18 @@ export default function App() {
 
           {result ? (
             view === 'jianpu' ? (
-              <JianpuView
-                notes={score.notes}
-                transpose={transposition}
-                sig={currentSig}
-                hardSpotIds={hardSpotIds}
-                fingerings={result.fingerings}
-                showTab={showTab}
-              />
+              <>
+                <JianpuView
+                  notes={score.notes}
+                  transpose={transposition}
+                  sig={currentSig}
+                  timeSignature={score.timeSignature}
+                  hardSpotIds={hardSpotIds}
+                  fingerings={result.fingerings}
+                  showTab={showTab}
+                />
+                <DurationLegend />
+              </>
             ) : (
               <StaffView
                 notes={score.notes}
