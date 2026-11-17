@@ -4,8 +4,8 @@ import { JianpuView } from './components/JianpuView'
 import { MetricsPanel } from './components/MetricsPanel'
 import { RecommendationTable } from './components/RecommendationTable'
 import { StaffView } from './components/StaffView'
-import { DEMO_JIANPU, DURATION_DEMO, demoScore } from './core/demo'
-import { parseJianpu } from './core/jianpu'
+import { DEMO_JIANPU, DEMO_LYRICS, DURATION_DEMO, demoScore } from './core/demo'
+import { attachLyrics, parseJianpu } from './core/jianpu'
 import { MAJOR_NAMES, keySignatureFor, transposeKey } from './core/keys'
 import { LAYOUTS, buildLayout, type LayoutId } from './core/layout'
 import { MODE_WEIGHTS, evaluate, recommend, type ModeKey } from './core/optimize'
@@ -26,10 +26,10 @@ export default function App() {
   const initialView = params.get('view') === 'staff' ? 'staff' : 'jianpu'
   const parsedT = Number(params.get('t') ?? 0)
   const initialT = Number.isFinite(parsedT) ? Math.max(-12, Math.min(12, parsedT)) : 0
-  const initialScore =
-    params.get('demo') === 'duration'
-      ? parseJianpu(DURATION_DEMO, 96, { tonic: 0, mode: 'major' }, '时值示例')
-      : demoScore()
+  const isDurationDemo = params.get('demo') === 'duration'
+  const initialScore = isDurationDemo
+    ? parseJianpu(DURATION_DEMO, 96, { tonic: 0, mode: 'major' }, '时值示例')
+    : demoScore()
 
   const [layoutId, setLayoutId] = useState<LayoutId>('tenor12')
   const [score, setScore] = useState<Score>(() => initialScore)
@@ -47,6 +47,10 @@ export default function App() {
   )
   const [imageTitle, setImageTitle] = useState('')
   const [jianpuDraft, setJianpuDraft] = useState(DEMO_JIANPU)
+  const [titleDraft, setTitleDraft] = useState(isDurationDemo ? '时值示例' : '小星星')
+  const [lyricsDraft, setLyricsDraft] = useState(isDurationDemo ? '' : DEMO_LYRICS)
+  const [composerDraft, setComposerDraft] = useState(isDurationDemo ? '' : '传统 曲')
+  const [lyricistDraft, setLyricistDraft] = useState(isDurationDemo ? '' : '佚名 词')
   const [keyTonic, setKeyTonic] = useState(2)
   const [keyMode, setKeyMode] = useState<KeyMode>('major')
   const [tempoDraft, setTempoDraft] = useState(96)
@@ -78,17 +82,26 @@ export default function App() {
     setImportError('')
     try {
       const tempo = Number.isFinite(tempoDraft) ? Math.max(30, Math.min(240, tempoDraft)) : 96
-      const parsed = parseJianpu(
+      let parsed = parseJianpu(
         jianpuDraft,
         tempo,
         { tonic: keyTonic, mode: keyMode },
-        '导入的简谱',
+        titleDraft.trim() || '未命名',
         timeDraft,
       )
       if (parsed.notes.length === 0) {
         throw new Error('没有解析到音符，检查一下数字 / 升降号 / 八度点。')
       }
-      setScore(parsed)
+      const verses = lyricsDraft
+        .split('\n')
+        .map(line => line.trim().split(/\s+/).filter(Boolean))
+        .filter(verse => verse.length > 0)
+      if (verses.length > 0) parsed = attachLyrics(parsed, verses)
+      setScore({
+        ...parsed,
+        composer: composerDraft.trim() || undefined,
+        lyricist: lyricistDraft.trim() || undefined,
+      })
       setTransposition(0)
       setView('jianpu')
       setImportOpen(false)
@@ -310,12 +323,40 @@ export default function App() {
                     <option value="2/4">2/4</option>
                   </select>
                 </label>
+                <label>
+                  曲名
+                  <input
+                    type="text"
+                    value={titleDraft}
+                    onChange={event => setTitleDraft(event.target.value)}
+                  />
+                </label>
+                <label>
+                  作曲
+                  <input
+                    type="text"
+                    value={composerDraft}
+                    onChange={event => setComposerDraft(event.target.value)}
+                  />
+                </label>
+                <label>
+                  作词
+                  <input
+                    type="text"
+                    value={lyricistDraft}
+                    onChange={event => setLyricistDraft(event.target.value)}
+                  />
+                </label>
                 <div className="import-actions">
                   <button onClick={applyJianpu}>应用简谱</button>
                   <button
                     className="ghost"
                     onClick={() => {
                       setJianpuDraft(DEMO_JIANPU)
+                      setTitleDraft('小星星')
+                      setLyricsDraft(DEMO_LYRICS)
+                      setComposerDraft('传统 曲')
+                      setLyricistDraft('佚名 词')
                       setKeyTonic(2)
                       setKeyMode('major')
                     }}
@@ -326,6 +367,10 @@ export default function App() {
                     className="ghost"
                     onClick={() => {
                       setJianpuDraft(DURATION_DEMO)
+                      setTitleDraft('时值示例')
+                      setLyricsDraft('')
+                      setComposerDraft('')
+                      setLyricistDraft('')
                       setKeyTonic(0)
                       setKeyMode('major')
                     }}
@@ -334,6 +379,15 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              <label className="import-text import-lyrics">
+                歌词（可选；一行一段，空格分隔）
+                <textarea
+                  value={lyricsDraft}
+                  onChange={event => setLyricsDraft(event.target.value)}
+                  rows={3}
+                  spellCheck={false}
+                />
+              </label>
             </div>
           ) : importTab === 'musicxml' ? (
             <div className="import-xml">
@@ -420,47 +474,47 @@ export default function App() {
           </details>
         </aside>
 
-        <section className="panel score-panel">
-          <div className="score-head">
-            <div>
-              <h2>{score.title}</h2>
-              <p>
-                {score.tempo} BPM · {score.timeSignature[0]}/{score.timeSignature[1]} · 原调{' '}
-                {originalSig.label} · 当前 {currentSig.label}（{signedT}）
-              </p>
-            </div>
-            <div className="legend">
-              <span className="legend-item">
-                <span className="dot blow" /> 吹
-              </span>
-              <span className="legend-item">
-                <span className="dot draw" /> 吸
-              </span>
-              <span className="legend-item">
-                <span className="dot hard" /> 难点
-              </span>
-            </div>
-          </div>
-
+        <section className={`panel score-panel${view === 'jianpu' ? ' jianpu-panel' : ''}`}>
           {result ? (
             view === 'jianpu' ? (
               <JianpuView
-                notes={score.notes}
+                score={score}
                 transpose={transposition}
                 sig={currentSig}
-                timeSignature={score.timeSignature}
                 hardSpotIds={hardSpotIds}
                 fingerings={result.fingerings}
                 showTab={showTab}
               />
             ) : (
-              <StaffView
-                notes={score.notes}
-                transpose={transposition}
-                sig={currentSig}
-                timeSignature={score.timeSignature}
-                hardSpotIds={hardSpotIds}
-              />
+              <>
+                <div className="score-head">
+                  <div>
+                    <h2>{score.title}</h2>
+                    <p>
+                      {score.tempo} BPM · {score.timeSignature[0]}/{score.timeSignature[1]} · 原调{' '}
+                      {originalSig.label} · 当前 {currentSig.label}（{signedT}）
+                    </p>
+                  </div>
+                  <div className="legend">
+                    <span className="legend-item">
+                      <span className="dot blow" /> 吹
+                    </span>
+                    <span className="legend-item">
+                      <span className="dot draw" /> 吸
+                    </span>
+                    <span className="legend-item">
+                      <span className="dot hard" /> 难点
+                    </span>
+                  </div>
+                </div>
+                <StaffView
+                  notes={score.notes}
+                  transpose={transposition}
+                  sig={currentSig}
+                  timeSignature={score.timeSignature}
+                  hardSpotIds={hardSpotIds}
+                />
+              </>
             )
           ) : (
             <div className="warn">当前移调超出 {layout.name} 的音域，换一个位置或选一个推荐调。</div>

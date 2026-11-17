@@ -71,3 +71,12 @@ describe('optimizer', () => {
     expect(keySignatureFor({ tonic: 0, mode: 'major' }).fifths).toBe(0)
   })
 })
+
+describe('demo lyrics', () => {
+  it('carries two lyric verses, creators, and slurs', () => {
+    const score = demoScore()
+    expect(score.notes[0].lyrics).toEqual(['一', '一'])
+    expect(score.composer).toBe('传统 曲')
+    expect(score.slurs?.length).toBeGreaterThan(0)
+  })
+})

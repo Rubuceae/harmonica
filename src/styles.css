@@ -315,6 +315,13 @@ input[type="range"] {
   background: var(--hard);
 }
 
+.jianpu-panel {
+  padding: 0;
+  background: #f0fdfa;
+  max-height: 780px;
+  overflow-y: auto;
+}
+
 .jianpu-svg {
   width: 100%;
   overflow-x: auto;
@@ -380,13 +387,29 @@ input[type="range"] {
 
 .import-text {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 6px;
   font-size: 12px;
   color: var(--muted);
 }
 
+.import-lyrics {
+  grid-column: 1 / -1;
+}
+
+.import-lyrics {
+  grid-template-rows: auto auto;
+}
+
+.import-lyrics textarea {
+  height: 70px;
+  min-height: 70px;
+}
+
 .import-text textarea {
   width: 100%;
+  height: auto;
+  min-height: 170px;
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;

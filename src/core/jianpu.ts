@@ -98,3 +98,13 @@ export function parseJianpu(
 
   return { title, tempo, timeSignature, originalKey, notes }
 }
+
+export function attachLyrics(score: Score, verses: string[][]): Score {
+  return {
+    ...score,
+    notes: score.notes.map((note, index) => ({
+      ...note,
+      lyrics: verses.map(verse => verse[index] ?? ''),
+    })),
+  }
+}

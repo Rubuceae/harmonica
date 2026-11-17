@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
 import { unzipSync } from 'fflate'
-import type { KeyInfo, KeyMode, NoteEvent, Score } from '../core/types'
+import type { KeyInfo, KeyMode, NoteEvent, Score, Slur } from '../core/types'
 
 const STEP_SEMITONES: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
 
@@ -98,6 +98,9 @@ type RawNote = {
   duration: number
   midi: number
   tieStop: boolean
+  lyrics?: string[]
+  slurStarts?: number[]
+  slurStops?: number[]
 }
 
 export function parseMusicXml(xml: string, titleHint?: string): Score {
@@ -179,12 +182,35 @@ export function parseMusicXml(xml: string, titleHint?: string): Score {
       const ties = [...asArray(note.tie), ...asArray(note.notations?.tied)]
       const tieStop = ties.some((tie: any) => tie?.['@_type'] === 'stop')
 
+      const lyrics: string[] = []
+      for (const lyric of asArray(note.lyric)) {
+        const verse = Math.max(0, numberValue(lyric['@_number'], lyrics.length + 1) - 1)
+        const value = text(lyric.text)
+        if (value) lyrics[verse] = value
+      }
+      const slurNodes = asArray(note.notations?.slur)
+      const slurStarts = slurNodes
+        .filter((slur: any) => slur?.['@_type'] === 'start')
+        .map((slur: any) => numberValue(slur['@_number'], 1))
+      const slurStops = slurNodes
+        .filter((slur: any) => slur?.['@_type'] === 'stop')
+        .map((slur: any) => numberValue(slur['@_number'], 1))
+      const lyricsValue = lyrics.length > 0 ? lyrics : undefined
+
       if (isChord) {
         const existing = rawNotes.find(item => Math.abs(item.onset - onset) < 0.001)
         if (existing) {
           if (midi > existing.midi) existing.midi = midi
         } else {
-          rawNotes.push({ onset, duration, midi, tieStop })
+          rawNotes.push({
+            onset,
+            duration,
+            midi,
+            tieStop,
+            lyrics: lyricsValue,
+            slurStarts,
+            slurStops,
+          })
         }
         continue
       }
@@ -195,6 +221,7 @@ export function parseMusicXml(xml: string, titleHint?: string): Score {
           const previous = rawNotes[i]
           if (previous.midi === midi && Math.abs(previous.onset + previous.duration - onset) < 0.001) {
             previous.duration += duration
+            if (!previous.lyrics?.length && lyricsValue) previous.lyrics = lyricsValue
             merged = true
             break
           }
@@ -202,7 +229,15 @@ export function parseMusicXml(xml: string, titleHint?: string): Score {
         if (merged) continue
       }
 
-      rawNotes.push({ onset, duration, midi, tieStop })
+      rawNotes.push({
+        onset,
+        duration,
+        midi,
+        tieStop,
+        lyrics: lyricsValue,
+        slurStarts,
+        slurStops,
+      })
     }
 
     for (const backup of asArray(measure.backup)) {
@@ -223,16 +258,34 @@ export function parseMusicXml(xml: string, titleHint?: string): Score {
   }
 
   const measureBeats = (timeSignature[0] * 4) / timeSignature[1]
-  const notes: NoteEvent[] = [...byOnset.values()]
-    .sort((a, b) => a.onset - b.onset)
-    .map((note, index) => ({
-      id: `n${index}`,
-      onset: note.onset,
-      duration: note.duration,
-      midi: note.midi,
-      measure: Math.floor(note.onset / measureBeats) + 1,
-      beatInMeasure: note.onset % measureBeats,
-    }))
+  const sortedRaw = [...byOnset.values()].sort((a, b) => a.onset - b.onset)
+  const notes: NoteEvent[] = sortedRaw.map((note, index) => ({
+    id: `n${index}`,
+    onset: note.onset,
+    duration: note.duration,
+    midi: note.midi,
+    measure: Math.floor(note.onset / measureBeats) + 1,
+    beatInMeasure: note.onset % measureBeats,
+    lyrics: note.lyrics && note.lyrics.length > 0 ? note.lyrics : undefined,
+  }))
+
+  const slurs: Slur[] = []
+  const activeSlurs = new Map<number, string>()
+  sortedRaw.forEach((raw, index) => {
+    const note = notes[index]
+    for (const number of raw.slurStops ?? []) {
+      const from = activeSlurs.get(number)
+      if (from && from !== note.id) slurs.push({ from, to: note.id })
+      activeSlurs.delete(number)
+    }
+    for (const number of raw.slurStarts ?? []) activeSlurs.set(number, note.id)
+  })
+
+  const creators = asArray(root.identification?.creator)
+  const composerNode = creators.find((creator: any) => creator?.['@_type'] === 'composer')
+  const lyricistNode = creators.find((creator: any) => creator?.['@_type'] === 'lyricist')
+  const composer = text(composerNode) || undefined
+  const lyricist = text(lyricistNode) || undefined
 
   const title =
     text(root.work?.['work-title']) ||
@@ -240,7 +293,7 @@ export function parseMusicXml(xml: string, titleHint?: string): Score {
     titleHint ||
     '导入的乐谱'
 
-  return { title, tempo, timeSignature, originalKey, notes }
+  return { title, tempo, timeSignature, originalKey, notes, composer, lyricist, slurs }
 }
 
 export async function loadMusicXmlFile(file: File): Promise<Score> {

@@ -20,6 +20,12 @@ export type NoteEvent = {
   midi: number
   measure: number
   beatInMeasure: number
+  lyrics?: string[]
+}
+
+export type Slur = {
+  from: string
+  to: string
 }
 
 export type Score = {
@@ -28,6 +34,9 @@ export type Score = {
   timeSignature: [number, number]
   originalKey: KeyInfo
   notes: NoteEvent[]
+  composer?: string
+  lyricist?: string
+  slurs?: Slur[]
 }
 
 export type HardSpotType = 'long-run' | 'jump' | 'edge'

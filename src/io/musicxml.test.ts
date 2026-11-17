@@ -37,6 +37,37 @@ const TIE_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </part>
 </score-partwise>`
 
+const LYRIC_SLUR_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <identification>
+    <creator type="composer">Test Composer</creator>
+    <creator type="lyricist">Test Lyricist</creator>
+  </identification>
+  <part-list><score-part id="P1"><part-name>Melody</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>4</divisions>
+        <key><fifths>0</fifths><mode>major</mode></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <lyric number="1"><text>一</text></lyric>
+        <notations><slur type="start" number="1"/></notations>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>4</duration>
+        <lyric number="1"><text>二</text></lyric>
+        <notations><slur type="stop" number="1"/></notations>
+      </note>
+      <note><rest/><duration>8</duration></note>
+    </measure>
+  </part>
+</score-partwise>`
+
 describe('parseMusicXml', () => {
   it('parses key, time, title, and pitches', () => {
     const score = parseMusicXml(SIMPLE_XML)
@@ -51,5 +82,14 @@ describe('parseMusicXml', () => {
     const score = parseMusicXml(TIE_XML)
     expect(score.notes).toHaveLength(1)
     expect(score.notes[0].duration).toBe(2)
+  })
+
+  it('parses lyrics, creators, and slurs', () => {
+    const score = parseMusicXml(LYRIC_SLUR_XML)
+    expect(score.composer).toBe('Test Composer')
+    expect(score.lyricist).toBe('Test Lyricist')
+    expect(score.notes[0].lyrics).toEqual(['一'])
+    expect(score.notes[1].lyrics).toEqual(['二'])
+    expect(score.slurs).toEqual([{ from: 'n0', to: 'n1' }])
   })
 })
