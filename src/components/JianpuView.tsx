@@ -158,7 +158,7 @@ export function JianpuView({
                       y1={8}
                       x2={measureX}
                       y2={lineHeight - 12}
-                      stroke="#d6d3d1"
+                      stroke="#b8b2a8"
                       strokeWidth={1}
                     />
                     {events.map((event, eventIndex) => {
@@ -220,7 +220,7 @@ export function JianpuView({
                               x2={x + (dashIndex + 1) * BEAT_WIDTH + 4}
                               y1={NUMBER_Y - 4}
                               y2={NUMBER_Y - 4}
-                              stroke="#9ca3af"
+                              stroke="#6b7280"
                               strokeWidth={1.5}
                               strokeLinecap="round"
                             />
@@ -271,7 +271,7 @@ export function JianpuView({
                         y1={8}
                         x2={measureX + measureWidth}
                         y2={lineHeight - 12}
-                        stroke="#d6d3d1"
+                        stroke="#b8b2a8"
                         strokeWidth={1}
                       />
                     )}
