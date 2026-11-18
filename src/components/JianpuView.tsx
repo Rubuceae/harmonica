@@ -155,11 +155,15 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
   if (current.length > 0) lines.push(current)
 
   const lineHeight = 78 + verseCount * 9 + (showTab ? 12 : 0)
-  const layouts: LineLayout[] = lines.map((line, lineIndex) => ({
-    line,
-    measureW: (W - MARGIN * 2) / line.length,
-    baseline: HEADER_H + lineIndex * lineHeight + NOTE_BASE,
-  }))
+  const layouts: LineLayout[] = lines.map((line, lineIndex) => {
+    const isLast = lineIndex === lines.length - 1 && lineIndex > 0
+    const count = isLast ? lines[lineIndex - 1].length : line.length
+    return {
+      line,
+      measureW: (W - MARGIN * 2) / Math.max(1, count),
+      baseline: HEADER_H + lineIndex * lineHeight + NOTE_BASE,
+    }
+  })
   const height = HEADER_H + Math.max(1, lines.length) * lineHeight + 16
 
   const stepOf = (measure: Measure, measureW: number) =>
@@ -289,7 +293,8 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                             y={layout.baseline}
                             textAnchor="middle"
                             fontSize={NOTE_FONT}
-                            fill="#94a3b8"
+                            fontWeight={600}
+                            fill="#0f172a"
                           >
                             0
                           </text>

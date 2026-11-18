@@ -96,9 +96,8 @@ export default function App() {
       .then((data: Score | null) => {
         if (!data || cancelled) return
         setSavedSongs(previous => {
-          if (previous.some(song => song.id === 'local-qifengle-score')) return previous
           const next = [
-            ...previous,
+            ...previous.filter(song => song.id !== 'local-qifengle-score'),
             {
               id: 'local-qifengle-score',
               title: '起风了（可优化）',
@@ -143,12 +142,11 @@ export default function App() {
         }
         const entry: SongEntry = {
           id: 'local-edelweiss-score',
-          title: '雪绒花（可优化）',
+          title: '雪绒花（简化版）',
           score: finalScore,
         }
         setSavedSongs(previous => {
-          if (previous.some(song => song.id === entry.id)) return previous
-          const next = [...previous, entry]
+          const next = [...previous.filter(song => song.id !== entry.id), entry]
           saveSongs(next)
           return next
         })
@@ -414,7 +412,7 @@ export default function App() {
             ))}
           </ul>
           <p className="hint">
-            「起风了（可优化）」「雪绒花（可优化）」来自本地文件；导入的简谱 / MusicXML / 图片结果也可以保存到这里。
+            「起风了（可优化）」「雪绒花（简化版）」来自本地文件；导入的简谱 / MusicXML / 图片结果也可以保存到这里。
           </p>
           </aside>
         </div>
