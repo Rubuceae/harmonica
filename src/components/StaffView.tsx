@@ -95,7 +95,7 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds, s
         if (section) {
           context.setFont('sans-serif', 11, 600)
           context.fillStyle = '#0e7490'
-          context.fillText(section.label, 10, stave.getYForLine(0) - 10)
+          context.fillText(section.label, 8, stave.getYForLine(0) - 12)
         }
 
         const measureNotes = measures.get(measure) ?? []

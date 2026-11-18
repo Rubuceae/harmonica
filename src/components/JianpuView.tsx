@@ -245,7 +245,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
           return (
             <g key={lineIndex}>
               {layout.section && (
-                <text x={MARGIN} y={layout.baseline - 44} fontSize={12} fontWeight={600} fill="#0e7490">
+                <text x={10} y={layout.baseline - 40} fontSize={11} fontWeight={600} fill="#0e7490">
                   {layout.section}
                 </text>
               )}
@@ -292,12 +292,12 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                         return (
                           <line
                             key={token.id}
-                            x1={x - 4}
-                            x2={x + 4}
-                            y1={layout.baseline - 3}
-                            y2={layout.baseline - 3}
-                            stroke="#475569"
-                            strokeWidth={1.6}
+                            x1={x - 5}
+                            x2={x + 5}
+                            y1={layout.baseline - 7}
+                            y2={layout.baseline - 7}
+                            stroke="#334155"
+                            strokeWidth={2.2}
                             strokeLinecap="round"
                           />
                         )
