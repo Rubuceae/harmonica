@@ -43,19 +43,37 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
       const maxMeasure = Math.max(...measures.keys(), 1)
       const systems = Math.ceil(maxMeasure / MEASURES_PER_SYSTEM)
       const width = Math.max(720, container.clientWidth || 900)
-      const measureWidth = (width - 20) / MEASURES_PER_SYSTEM
       const height = systems * SYSTEM_HEIGHT + 24
 
       const renderer = new Renderer(container, Renderer.Backends.SVG)
       renderer.resize(width, height)
       const context = renderer.getContext()
 
+      // 每行第一个小节要额外容纳谱号/调号/拍号；量出这段宽度，
+      // 让第一个小节的“音符区”与其他小节等宽，避免第一个小节被压缩/漂移。
+      const modifierWidths: number[] = []
+      for (let system = 0; system < systems; system += 1) {
+        const dummy = new Stave(0, 0, 300)
+        dummy.addClef('treble')
+        dummy.addKeySignature(sig.name)
+        if (system === 0) dummy.addTimeSignature(`${timeSignature[0]}/${timeSignature[1]}`)
+        modifierWidths.push(dummy.getNoteStartX())
+      }
+      const maxModifier = Math.max(...modifierWidths, 0)
+      const measureWidth = (width - 20 - maxModifier) / MEASURES_PER_SYSTEM
+
       for (let measure = 1; measure <= maxMeasure; measure += 1) {
         const systemIndex = Math.floor((measure - 1) / MEASURES_PER_SYSTEM)
         const indexInSystem = (measure - 1) % MEASURES_PER_SYSTEM
-        const x = 10 + indexInSystem * measureWidth
+        const modifierWidth = modifierWidths[systemIndex]
+        const x =
+          indexInSystem === 0
+            ? 10
+            : 10 + modifierWidth + indexInSystem * measureWidth
+        const staveWidth =
+          indexInSystem === 0 ? modifierWidth + measureWidth : measureWidth
         const y = 20 + systemIndex * SYSTEM_HEIGHT
-        const stave = new Stave(x, y, measureWidth)
+        const stave = new Stave(x, y, staveWidth)
 
         if (indexInSystem === 0) {
           stave.addClef('treble')
@@ -93,7 +111,7 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
         const totalBeats = measureNotes.reduce((sum, note) => sum + note.duration, 0)
         const voice = new Voice({ numBeats: Math.max(0.5, totalBeats), beatValue: 4 })
         voice.addTickables(staveNotes)
-        const available = measureWidth - (indexInSystem === 0 ? 82 : 18)
+        const available = measureWidth - 18
         new Formatter().joinVoices([voice]).format([voice], available)
         voice.draw(context, stave)
       }

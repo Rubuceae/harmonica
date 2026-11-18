@@ -10,6 +10,7 @@ export type SongEntry = {
   kind: SongKind
   score?: Score
   svgUrl?: string
+  svgText?: string
   builtin?: boolean
 }
 
@@ -38,7 +39,10 @@ export function loadSavedSongs(): SongEntry[] {
     const data = JSON.parse(raw) as SongEntry[]
     if (!Array.isArray(data)) return []
     return data.filter(
-      song => song && song.kind === 'score' && song.score && typeof song.title === 'string',
+      song =>
+        song &&
+        typeof song.title === 'string' &&
+        (song.kind === 'score' ? Boolean(song.score) : Boolean(song.svgText)),
     )
   } catch {
     return []

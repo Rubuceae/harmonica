@@ -165,7 +165,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
   })
 
   const title = score.title || '未命名'
-  const titleSize = Math.min(28, 800 / Math.max(1, title.length))
+  const titleSize = Math.min(24, 800 / Math.max(1, title.length))
   const originalLabel = keySignatureFor(score.originalKey).label
 
   return (

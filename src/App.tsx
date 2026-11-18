@@ -45,10 +45,19 @@ export default function App() {
 
   const importParam = params.get('import')
   const [importOpen, setImportOpen] = useState(
-    importParam === '1' || importParam === 'image' || importParam === 'musicxml',
+    importParam === '1' ||
+      importParam === 'image' ||
+      importParam === 'musicxml' ||
+      importParam === 'reference',
   )
-  const [importTab, setImportTab] = useState<'jianpu' | 'musicxml' | 'image'>(
-    importParam === 'image' ? 'image' : importParam === 'musicxml' ? 'musicxml' : 'jianpu',
+  const [importTab, setImportTab] = useState<'jianpu' | 'musicxml' | 'image' | 'reference'>(
+    importParam === 'image'
+      ? 'image'
+      : importParam === 'musicxml'
+        ? 'musicxml'
+        : importParam === 'reference'
+          ? 'reference'
+          : 'jianpu',
   )
   const [imageTitle, setImageTitle] = useState('')
   const [songsOpen, setSongsOpen] = useState(params.get('songs') === '1')
@@ -89,6 +98,12 @@ export default function App() {
   )
 
   const allSongs = [...BUILTIN_SONGS, ...savedSongs]
+  const referenceSrc = referenceSong
+    ? referenceSong.svgUrl ??
+      (referenceSong.svgText
+        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(referenceSong.svgText)}`
+        : '')
+    : ''
 
   const signedT = transposition > 0 ? `+${transposition}` : String(transposition)
   const anchor = layout.id === 'standard12' ? 'C5（第三间）' : 'C4（下加一线）'
@@ -125,6 +140,63 @@ export default function App() {
     setSavedSongs(next)
     saveSongs(next)
     if (currentSongId === id) setCurrentSongId('')
+  }
+
+  const onReferenceFile = async (file: File | undefined) => {
+    if (!file) return
+    setImportError('')
+    setImportStatus(`正在读取 ${file.name}…`)
+    try {
+      const text = await file.text()
+      let svg = ''
+      if (file.name.toLowerCase().endsWith('.svg')) {
+        svg = text
+      } else {
+        const doc = new DOMParser().parseFromString(text, 'text/html')
+        const node = doc.querySelector('svg.sheet-svg') ?? doc.querySelector('svg')
+        svg = node?.outerHTML ?? ''
+      }
+      if (!svg.includes('<svg')) throw new Error('文件里没有找到 SVG 谱面')
+      const title = file.name.replace(/\.[^.]+$/, '') || '参考谱'
+      const entry: SongEntry = { id: newSongId(), title, kind: 'reference', svgText: svg }
+      const next = [...savedSongs, entry]
+      setSavedSongs(next)
+      saveSongs(next)
+      setCurrentSongId(entry.id)
+      setReferenceSong(entry)
+      setReferenceError(false)
+      setSongsOpen(false)
+      setImportOpen(false)
+      setImportStatus('')
+    } catch (error) {
+      setImportStatus('')
+      setImportError(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const routeImportFile = async (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    if (['xml', 'musicxml', 'mxl'].includes(ext)) {
+      await onMusicXmlFile(file)
+      return
+    }
+    if (['png', 'jpg', 'jpeg', 'tif', 'tiff', 'pdf'].includes(ext)) {
+      await onImageFile(file)
+      return
+    }
+    if (['html', 'htm', 'svg'].includes(ext)) {
+      await onReferenceFile(file)
+      return
+    }
+    if (['txt', 'text'].includes(ext)) {
+      const text = await file.text()
+      setJianpuDraft(text)
+      setImportTab('jianpu')
+      setImportStatus(`已载入 ${file.name}，检查后点“应用简谱”。`)
+      setImportError('')
+      return
+    }
+    setImportError(`拖入的文件类型不支持：${ext || file.name}`)
   }
 
   const applyJianpu = () => {
@@ -348,6 +420,18 @@ export default function App() {
             </button>
           </div>
 
+          <div
+            className="drop-zone"
+            onDragOver={event => event.preventDefault()}
+            onDrop={event => {
+              event.preventDefault()
+              const file = event.dataTransfer.files?.[0]
+              if (file) void routeImportFile(file)
+            }}
+          >
+            拖入文件：MusicXML / .mxl / 简谱 .txt / 图片 / PDF / 参考页 .html / .svg
+          </div>
+
           <div className="segmented" role="group" aria-label="导入格式">
             <button
               className={importTab === 'jianpu' ? 'active' : ''}
@@ -375,6 +459,15 @@ export default function App() {
               }}
             >
               图片 OMR
+            </button>
+            <button
+              className={importTab === 'reference' ? 'active' : ''}
+              onClick={() => {
+                setImportTab('reference')
+                setImportError('')
+              }}
+            >
+              参考页
             </button>
           </div>
 
@@ -508,7 +601,7 @@ export default function App() {
                 支持 .xml / .musicxml / .mxl；取第一个 part 的最高音旋律。解析失败会显示原因。
               </p>
             </div>
-          ) : (
+          ) : importTab === 'image' ? (
             <div className="import-xml">
               <input
                 type="text"
@@ -524,6 +617,17 @@ export default function App() {
               <p className="hint">
                 本地 OMR：先在项目目录运行 <code>npm run omr</code>（需要 Audiveris 5.x）。
                 支持印刷体五线谱图片 / PDF；简谱图片暂不支持；曲名默认用文件名。
+              </p>
+            </div>
+          ) : (
+            <div className="import-xml">
+              <input
+                type="file"
+                accept=".html,.htm,.svg,text/html,image/svg+xml"
+                onChange={event => onReferenceFile(event.target.files?.[0])}
+              />
+              <p className="hint">
+                把站点保存的 HTML 或 SVG 加入歌曲库；只读参考谱，优化器 / 移调不适用。
               </p>
             </div>
           )}
@@ -591,17 +695,17 @@ export default function App() {
             <div className="reference-score">
               <div className="reference-head">
                 <span className="badge">参考谱</span>
-                <a href={referenceSong.svgUrl} target="_blank" rel="noreferrer">
+                <a href={referenceSrc} target="_blank" rel="noreferrer">
                   打开 SVG
                 </a>
               </div>
-              {referenceError ? (
+              {referenceError || !referenceSrc ? (
                 <p className="hint">
-                  参考谱文件未找到：public/songs/qifengle.svg（本地文件，未提交）。
+                  参考谱文件未找到：本地参考 SVG 缺失，或导入的 HTML 里没有谱面。
                 </p>
               ) : (
                 <img
-                  src={referenceSong.svgUrl}
+                  src={referenceSrc}
                   alt={`${referenceSong.title} 参考谱`}
                   onError={() => setReferenceError(true)}
                 />
