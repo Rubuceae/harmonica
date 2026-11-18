@@ -111,7 +111,7 @@ export default function App() {
           setScore(data)
           setCurrentSongId('local-qifengle-score')
           setTransposition(0)
-          setView('jianpu')
+          setView(params.get('view') === 'staff' ? 'staff' : 'jianpu')
         }
       })
       .catch(() => {})
@@ -752,6 +752,7 @@ export default function App() {
                     </div>
                   </div>
                   <StaffView
+                    sections={score.sections}
                     notes={score.notes}
                     transpose={effectiveTransposition}
                     sig={currentSig}

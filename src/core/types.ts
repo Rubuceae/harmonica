@@ -28,6 +28,12 @@ export type Slur = {
   to: string
 }
 
+export type Section = {
+  label: string
+  startMeasure: number
+  endMeasure: number
+}
+
 export type Score = {
   title: string
   tempo: number
@@ -37,6 +43,7 @@ export type Score = {
   composer?: string
   lyricist?: string
   slurs?: Slur[]
+  sections?: Section[]
 }
 
 export type HardSpotType = 'long-run' | 'jump' | 'edge'

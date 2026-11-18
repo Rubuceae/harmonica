@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Accidental, Barline, Formatter, Renderer, Stave, StaveNote, Voice } from 'vexflow'
 import type { KeySignature } from '../core/keys'
 import { staffNote } from '../core/keys'
-import type { NoteEvent } from '../core/types'
+import type { NoteEvent, Section } from '../core/types'
 
 type Props = {
   notes: NoteEvent[]
@@ -10,6 +10,7 @@ type Props = {
   sig: KeySignature
   timeSignature: [number, number]
   hardSpotIds: Set<string>
+  sections?: Section[]
 }
 
 const MEASURES_PER_SYSTEM = 4
@@ -23,7 +24,7 @@ function durationToVex(duration: number): { duration: string; dots: number } {
   return { duration: '16', dots: 0 }
 }
 
-export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }: Props) {
+export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds, sections }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [error, setError] = useState('')
 
@@ -90,6 +91,12 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
         stave.setEndBarType(measure === maxMeasure ? Barline.type.END : Barline.type.SINGLE)
         stave.setMeasure(measure)
         stave.setContext(context).draw()
+        const section = sections?.find(item => item.startMeasure === measure)
+        if (section) {
+          context.setFont('sans-serif', 11, 600)
+          context.fillStyle = '#0e7490'
+          context.fillText(section.label, 10, stave.getYForLine(0) - 10)
+        }
 
         const measureNotes = measures.get(measure) ?? []
         if (measureNotes.length === 0) continue
@@ -113,7 +120,19 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
         }
 
         const totalBeats = measureNotes.reduce((sum, note) => sum + note.duration, 0)
-        const voice = new Voice({ numBeats: Math.max(0.5, totalBeats), beatValue: 4 })
+        const meter = Math.max(1, Math.ceil(totalBeats - 1e-6))
+        const remaining = meter - totalBeats
+        if (remaining > 1e-3) {
+          const restDur = durationToVex(remaining)
+          staveNotes.push(
+            new StaveNote({
+              keys: ['b/4'],
+              duration: `${restDur.duration}${restDur.dots > 0 ? 'd' : ''}r`,
+              clef: 'treble',
+            }),
+          )
+        }
+        const voice = new Voice({ numBeats: meter, beatValue: 4 })
         voice.addTickables(staveNotes)
         const available = measureWidth - 18
         new Formatter().joinVoices([voice]).format([voice], available)
@@ -136,7 +155,7 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
       window.removeEventListener('resize', onResize)
       window.clearTimeout(timer)
     }
-  }, [notes, transpose, sig, timeSignature, hardSpotIds])
+  }, [notes, transpose, sig, timeSignature, hardSpotIds, sections])
 
   return (
     <div className="staff">

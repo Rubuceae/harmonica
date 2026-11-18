@@ -13,7 +13,7 @@ type Props = {
 
 const W = 1000
 const MARGIN = 44
-const HEADER_H = 150
+const HEADER_H = 160
 const MAX_TOKENS = 26
 const MAX_MEASURES = 8
 const MEASURE_PAD = 8
@@ -130,6 +130,7 @@ type LineLayout = {
   line: Measure[]
   measureW: number
   baseline: number
+  section: string
 }
 
 export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props) {
@@ -137,13 +138,19 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
   const measureBeats = (beats * 4) / beatType
   const measures = buildMeasures(score.notes, measureBeats)
   const verseCount = score.notes.reduce((max, note) => Math.max(max, note.lyrics?.length ?? 0), 0)
+  const sectionFor = (measure: number) =>
+    score.sections?.find(section => measure >= section.startMeasure && measure <= section.endMeasure)?.label ?? ''
   const lines: Measure[][] = []
   let current: Measure[] = []
   let tokenCount = 0
   for (const measure of measures) {
+    const section = sectionFor(measure.measure)
+    const currentSection = current.length > 0 ? sectionFor(current[0].measure) : section
     if (
       current.length > 0 &&
-      (tokenCount + measure.tokens.length > MAX_TOKENS || current.length >= MAX_MEASURES)
+      (section !== currentSection ||
+        tokenCount + measure.tokens.length > MAX_TOKENS ||
+        current.length >= MAX_MEASURES)
     ) {
       lines.push(current)
       current = []
@@ -162,6 +169,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
       line,
       measureW: (W - MARGIN * 2) / Math.max(1, count),
       baseline: HEADER_H + lineIndex * lineHeight + NOTE_BASE,
+      section: sectionFor(line[0].measure),
     }
   })
   const height = HEADER_H + Math.max(1, lines.length) * lineHeight + 16
@@ -203,39 +211,44 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
         aria-label="简谱"
       >
         <rect x={0} y={0} width={W} height={height} fill="#f0fdfa" />
-        <text x={W / 2} y={36} textAnchor="middle" fontSize={titleSize} fontWeight={500} fill="#0ea5e9">
+        <text x={W / 2} y={48} textAnchor="middle" fontSize={titleSize} fontWeight={500} fill="#0ea5e9">
           {title}
         </text>
         {score.composer && (
-          <text x={960} y={62} textAnchor="end" fontSize={11.5} fill="#475569">
+          <text x={960} y={80} textAnchor="end" fontSize={12} fill="#475569">
             {score.composer}
           </text>
         )}
         {score.lyricist && (
-          <text x={960} y={78} textAnchor="end" fontSize={11.5} fill="#475569">
+          <text x={960} y={96} textAnchor="end" fontSize={12} fill="#475569">
             {score.lyricist}
           </text>
         )}
-        <text x={40} y={64} fontSize={14} fill="#475569">
+        <text x={40} y={80} fontSize={14} fontWeight={600} fill="#475569">
           1=C
         </text>
-        <text x={40} y={86} fontSize={11.5} fill="#475569">
+        <text x={40} y={100} fontSize={13} fill="#475569">
           {beats}/{beatType}
         </text>
-        <text x={40} y={104} fontSize={11.5} fill="#475569">
+        <text x={40} y={118} fontSize={13} fill="#475569">
           ♩ = {score.tempo}
         </text>
         {transpose !== 0 && (
-          <text x={40} y={120} fontSize={10} fill="#475569">
+          <text x={40} y={134} fontSize={10} fill="#475569">
             原调 {originalLabel} · 当前 {sig.label}
           </text>
         )}
 
         {layouts.map((layout, lineIndex) => {
-          const barBottom =
-            layout.baseline + LYRIC_OFFSET + Math.max(0, verseCount - 1) * LYRIC_GAP + 12
+          const barTop = layout.baseline - 28
+          const barBottom = layout.baseline + lineHeight - 36
           return (
             <g key={lineIndex}>
+              {layout.section && (
+                <text x={MARGIN} y={layout.baseline - 44} fontSize={12} fontWeight={600} fill="#0e7490">
+                  {layout.section}
+                </text>
+              )}
               {layout.line.map((measure, measureIndex) => {
                 const measureX = MARGIN + measureIndex * layout.measureW
                 const step = stepOf(measure, layout.measureW)
@@ -266,7 +279,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                     {measureIndex > 0 && (
                       <line
                         x1={measureX}
-                        y1={layout.baseline - 28}
+                        y1={barTop}
                         x2={measureX}
                         y2={barBottom}
                         stroke="#b6c2cf"
@@ -326,7 +339,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                           ))}
                           {jp.accidental && (
                             <text
-                              x={x - NOTE_FONT * 0.55}
+                              x={x - NOTE_FONT * 0.45}
                               y={layout.baseline - NOTE_FONT * 0.55}
                               textAnchor="end"
                               fontSize={NOTE_FONT * 0.6}
@@ -415,16 +428,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                         )
                       })
                     })}
-                    {measureIndex === layout.line.length - 1 && (
-                      <line
-                        x1={measureX + layout.measureW}
-                        y1={layout.baseline - 28}
-                        x2={measureX + layout.measureW}
-                        y2={barBottom}
-                        stroke="#b6c2cf"
-                        strokeWidth={1}
-                      />
-                    )}
+
                   </g>
                 )
               })}
