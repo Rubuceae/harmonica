@@ -605,10 +605,10 @@ GUI 里要能看到优化的“过程”，不只是结果：
 - 导入的简谱 / MusicXML / 图片识别结果可保存到歌曲库。
 - 导入：简谱文本 / MusicXML / 图片 OMR 三入口，支持拖拽。
 - 起风了（可优化）：本地 `public/songs/qifengle.json`（gitignore）：220 个音符、29 小节、两段歌词；可移调 / 优化。
-- 雪绒花：来源 [人人鋼琴網](https://tw.everyonepiano.com/Music-1288.html)；站点完整五线谱预览只有 200×260 缩略图，PDF 500 / 需登录；按页面 3/4 旋律转成简化版 `public/songs/edelweiss.jianpu.txt` / `lyrics.txt`（gitignore），歌曲库「雪绒花（简化版）」；首小节 `0 3 5` 前置休止表示 2 拍弱起，不是原站钢琴伴奏谱。
+- 雪绒花：来源 [人人鋼琴網](https://tw.everyonepiano.com/Music-1288.html)；站点完整五线谱预览只有 200×260 缩略图，PDF 500 / 需登录；按用户提供的正确截图逐音重录 `public/songs/edelweiss.jianpu.txt`（gitignore），3/4、1=C、♩=148，32 小节；带高八度点、连音线、结尾休止；不附歌词。
 - 图片 OMR：仅印刷体五线谱；实测五线谱截图 200，简谱 HTML 截图 502；简谱图片 OCR 未做。
-- 雪绒花：站点五线谱预览 200×260，PDF 500；按页面旋律转写简化版；完整钢琴谱需登录/PDF。
-- 反复 / 弱起（未完成）：反复记号还没有展开，MusicXML 的 repeat / ending / D.C. / D.S. 会被忽略；简谱用前置休止临时表示弱起，partial first measure 未做。
+- 雪绒花：已按用户提供的正确简谱重录；截图无歌词，本曲不显示歌词。
+- 反复 / 弱起（未完成）：反复记号还没有展开，MusicXML 的 repeat / ending / D.C. / D.S. 会被忽略；partial first measure / MusicXML 弱起未做。雪绒花当前版本从 `3 - 5` 开始。
 
 ## 9. 平台与技术
 
@@ -777,8 +777,8 @@ tests/
 | 18 | 歌曲管理 | 内置 + localStorage 保存/删除；起风了 / 雪绒花本地 JSON；独立抽屉 |
 | 19 | 导入 / 版式 | 曲谱导入三入口 + 拖拽；五线谱首小节按修饰符实测宽度；全局字号 14 基准 |
 | 20 | 起风了 / OMR | 起风了解析为可优化 JSON（220 notes / 29 measures，本地）；图片 OMR 仅五线谱（简谱截图 502） |
-| 21 | 布局 / 雪绒花 | 左栏推荐/指标/难点；歌曲抽屉；±1 八度 + 不自动移；简谱按拍下划线、小节等宽、最后一行不拉伸；雪绒花简化版 + 前置休止弱起 |
-| 22 | 反复 / 弱起 | 未完成：repeat / ending / D.C. / D.S. 尚未展开；MusicXML partial measure 未保留；简谱用前置休止临时表示弱起 |
+| 21 | 布局 / 雪绒花 | 左栏推荐/指标/难点；歌曲抽屉；±1 八度 + 不自动移；简谱按拍下划线、小节等宽、最后一行不拉伸；雪绒花按截图重录 |
+| 22 | 反复 / 弱起 | 未完成：repeat / ending / D.C. / D.S. 尚未展开；MusicXML partial measure 未保留 |
 
 ---
 

@@ -123,26 +123,36 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([
-      fetch('/songs/edelweiss.jianpu.txt').then(response => (response.ok ? response.text() : '')),
-      fetch('/songs/edelweiss.lyrics.txt').then(response => (response.ok ? response.text() : '')),
-    ])
-      .then(([text, lyricsText]) => {
+    fetch('/songs/edelweiss.jianpu.txt')
+      .then(response => (response.ok ? response.text() : ''))
+      .then(text => {
         if (!text || cancelled) return
-        const parsed = parseJianpu(text, 90, { tonic: 0, mode: 'major' }, '雪绒花', [3, 4])
-        const verses = lyricsText
-          .split('\n')
-          .map(line => line.trim().split(/\s+/).filter(Boolean))
-          .filter(verse => verse.length > 0)
-        const withLyrics = verses.length > 0 ? attachLyrics(parsed, verses) : parsed
+        const parsed = parseJianpu(text, 148, { tonic: 0, mode: 'major' }, '雪绒花', [3, 4])
         const finalScore = {
-          ...withLyrics,
-          composer: 'Richard Rodgers',
-          lyricist: 'Oscar Hammerstein II',
+          ...parsed,
+          slurs: [
+            { from: 'n0', to: 'n1' },
+            { from: 'n3', to: 'n4' },
+            { from: 'n6', to: 'n7' },
+            { from: 'n8', to: 'n10' },
+            { from: 'n13', to: 'n14' },
+            { from: 'n16', to: 'n17' },
+            { from: 'n19', to: 'n20' },
+            { from: 'n21', to: 'n23' },
+            { from: 'n26', to: 'n27' },
+            { from: 'n28', to: 'n30' },
+            { from: 'n31', to: 'n32' },
+            { from: 'n34', to: 'n35' },
+            { from: 'n36', to: 'n37' },
+            { from: 'n40', to: 'n41' },
+            { from: 'n43', to: 'n44' },
+            { from: 'n46', to: 'n47' },
+            { from: 'n48', to: 'n50' },
+          ],
         }
         const entry: SongEntry = {
           id: 'local-edelweiss-score',
-          title: '雪绒花（简化版）',
+          title: '雪绒花',
           score: finalScore,
         }
         setSavedSongs(previous => {
@@ -154,7 +164,7 @@ export default function App() {
           setScore(finalScore)
           setCurrentSongId(entry.id)
           setTransposition(0)
-          setView('staff')
+          setView(params.get('view') === 'jianpu' ? 'jianpu' : 'staff')
         }
       })
       .catch(() => {})
@@ -412,7 +422,7 @@ export default function App() {
             ))}
           </ul>
           <p className="hint">
-            「起风了（可优化）」「雪绒花（简化版）」来自本地文件；导入的简谱 / MusicXML / 图片结果也可以保存到这里。
+            「起风了（可优化）」「雪绒花」来自本地文件；导入的简谱 / MusicXML / 图片结果也可以保存到这里。
           </p>
           </aside>
         </div>

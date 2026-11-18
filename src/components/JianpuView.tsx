@@ -15,7 +15,7 @@ const W = 1000
 const MARGIN = 44
 const HEADER_H = 150
 const MAX_TOKENS = 26
-const MAX_MEASURES = 6
+const MAX_MEASURES = 8
 const MEASURE_PAD = 8
 const NOTE_BASE = 22
 const NOTE_FONT = 20
@@ -190,7 +190,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
   })
 
   const title = score.title || '未命名'
-  const titleSize = Math.min(24, 800 / Math.max(1, title.length))
+  const titleSize = Math.min(30, 800 / Math.max(1, title.length))
   const originalLabel = keySignatureFor(score.originalKey).label
 
   return (
@@ -203,7 +203,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
         aria-label="简谱"
       >
         <rect x={0} y={0} width={W} height={height} fill="#f0fdfa" />
-        <text x={W / 2} y={34} textAnchor="middle" fontSize={titleSize} fontWeight={500} fill="#0ea5e9">
+        <text x={W / 2} y={36} textAnchor="middle" fontSize={titleSize} fontWeight={500} fill="#0ea5e9">
           {title}
         </text>
         {score.composer && (
@@ -225,9 +225,11 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
         <text x={40} y={104} fontSize={11.5} fill="#475569">
           ♩ = {score.tempo}
         </text>
-        <text x={40} y={120} fontSize={10} fill="#475569">
-          原调 {originalLabel} · 当前 {sig.label}
-        </text>
+        {transpose !== 0 && (
+          <text x={40} y={120} fontSize={10} fill="#475569">
+            原调 {originalLabel} · 当前 {sig.label}
+          </text>
+        )}
 
         {layouts.map((layout, lineIndex) => {
           const barBottom =
@@ -261,14 +263,16 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
 
                 return (
                   <g key={measure.measure}>
-                    <line
-                      x1={measureX}
-                      y1={layout.baseline - 28}
-                      x2={measureX}
-                      y2={barBottom}
-                      stroke="#b6c2cf"
-                      strokeWidth={1}
-                    />
+                    {measureIndex > 0 && (
+                      <line
+                        x1={measureX}
+                        y1={layout.baseline - 28}
+                        x2={measureX}
+                        y2={barBottom}
+                        stroke="#b6c2cf"
+                        strokeWidth={1}
+                      />
+                    )}
                     {measure.tokens.map((token, tokenIndex) => {
                       const x = measureX + MEASURE_PAD + (tokenIndex + 0.5) * step
                       if (token.kind === 'dash') {
@@ -310,7 +314,11 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                               cy={
                                 jp.octave > 0
                                   ? layout.baseline - 26 - dotIndex * 4.5
-                                  : layout.baseline + 8 + dotIndex * 5
+                                  : layout.baseline +
+                                    BEAM_OFFSET +
+                                    (token.beam > 0 ? (token.beam - 1) * BEAM_GAP : 0) +
+                                    5 +
+                                    dotIndex * 5
                               }
                               r={2.2}
                               fill="#0f172a"
@@ -318,14 +326,14 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                           ))}
                           {jp.accidental && (
                             <text
-                              x={x - NOTE_FONT * 0.5}
-                              y={layout.baseline}
+                              x={x - NOTE_FONT * 0.55}
+                              y={layout.baseline - NOTE_FONT * 0.55}
                               textAnchor="end"
-                              fontSize={NOTE_FONT * 0.7}
+                              fontSize={NOTE_FONT * 0.6}
                               fontWeight={600}
                               fill="#b45309"
                             >
-                              {jp.accidental}
+                              {jp.accidental === '#' ? '♯' : '♭'}
                             </text>
                           )}
                           <text
