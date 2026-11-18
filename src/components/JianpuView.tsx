@@ -20,9 +20,9 @@ const MEASURE_PAD = 8
 const NOTE_BASE = 22
 const NOTE_FONT = 20
 const LYRIC_FONT = 15
-const LYRIC_OFFSET = 34
+const LYRIC_OFFSET = 40
 const LYRIC_GAP = 18
-const BEAM_OFFSET = 12
+const BEAM_OFFSET = 18
 const BEAM_GAP = 3.5
 
 type RawEvent =
@@ -310,7 +310,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                               cy={
                                 jp.octave > 0
                                   ? layout.baseline - 26 - dotIndex * 4.5
-                                  : layout.baseline + 4 + dotIndex * 4.5
+                                  : layout.baseline + 8 + dotIndex * 5
                               }
                               r={2.2}
                               fill="#0f172a"
@@ -340,9 +340,9 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                           </text>
                           {token.dotted && (
                             <circle
-                              cx={x + NOTE_FONT * 0.38}
-                              cy={layout.baseline - 5}
-                              r={2}
+                              cx={x + NOTE_FONT * 0.44}
+                              cy={layout.baseline - 6}
+                              r={1.7}
                               fill="#0f172a"
                             />
                           )}
