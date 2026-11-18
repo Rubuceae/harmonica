@@ -39,6 +39,11 @@ export default function App() {
   const [layoutId, setLayoutId] = useState<LayoutId>('tenor12')
   const [score, setScore] = useState<Score>(() => initialScore)
   const [transposition, setTransposition] = useState(initialT)
+  const [octaveShift, setOctaveShift] = useState(() => {
+    const value = Number(params.get('octave') ?? 0)
+    return Number.isFinite(value) ? Math.max(-2, Math.min(2, value)) : 0
+  })
+  const effectiveTransposition = transposition + octaveShift * 12
   const [mode, setMode] = useState<ModeKey>('air')
   const [view, setView] = useState<'jianpu' | 'staff'>(initialView)
   const [showTab, setShowTab] = useState(params.get('tab') === '1')
@@ -83,13 +88,13 @@ export default function App() {
   const layout = useMemo(() => buildLayout(layoutId), [layoutId])
   const weights = MODE_WEIGHTS[mode]
   const result = useMemo(
-    () => evaluate(score, layout, transposition, weights),
-    [score, layout, transposition, weights],
+    () => evaluate(score, layout, effectiveTransposition, weights),
+    [score, layout, effectiveTransposition, weights],
   )
   const recommendations = useMemo(() => recommend(score, layout, weights), [score, layout, weights])
   const currentSig = useMemo(
-    () => keySignatureFor(transposeKey(score.originalKey, transposition)),
-    [score.originalKey, transposition],
+    () => keySignatureFor(transposeKey(score.originalKey, effectiveTransposition)),
+    [score.originalKey, effectiveTransposition],
   )
   const originalSig = useMemo(() => keySignatureFor(score.originalKey), [score.originalKey])
   const hardSpotIds = useMemo(
@@ -129,7 +134,7 @@ export default function App() {
           setReferenceSong(null)
           setScore(data)
           setCurrentSongId('local-qifengle-score')
-          setTransposition(-6)
+          setTransposition(0)
           setView('jianpu')
         }
       })
@@ -140,7 +145,53 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const signedT = transposition > 0 ? `+${transposition}` : String(transposition)
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      fetch('/songs/edelweiss.jianpu.txt').then(response => (response.ok ? response.text() : '')),
+      fetch('/songs/edelweiss.lyrics.txt').then(response => (response.ok ? response.text() : '')),
+    ])
+      .then(([text, lyricsText]) => {
+        if (!text || cancelled) return
+        const parsed = parseJianpu(text, 90, { tonic: 0, mode: 'major' }, '雪绒花', [3, 4])
+        const verses = lyricsText
+          .split('\n')
+          .map(line => line.trim().split(/\s+/).filter(Boolean))
+          .filter(verse => verse.length > 0)
+        const withLyrics = verses.length > 0 ? attachLyrics(parsed, verses) : parsed
+        const finalScore = {
+          ...withLyrics,
+          composer: 'Richard Rodgers',
+          lyricist: 'Oscar Hammerstein II',
+        }
+        const entry: SongEntry = {
+          id: 'local-edelweiss-score',
+          title: '雪绒花（可优化）',
+          kind: 'score',
+          score: finalScore,
+        }
+        setSavedSongs(previous => {
+          if (previous.some(song => song.id === entry.id)) return previous
+          const next = [...previous, entry]
+          saveSongs(next)
+          return next
+        })
+        if (params.get('song') === 'edelweiss') {
+          setReferenceSong(null)
+          setScore(finalScore)
+          setCurrentSongId(entry.id)
+          setTransposition(0)
+          setView('staff')
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const signedT = effectiveTransposition > 0 ? `+${effectiveTransposition}` : String(effectiveTransposition)
   const anchor = layout.id === 'standard12' ? 'C5（第三间）' : 'C4（下加一线）'
 
   const selectSong = (song: SongEntry) => {
@@ -398,7 +449,8 @@ export default function App() {
       </div>
 
       {songsOpen && (
-        <section className="panel song-panel">
+        <div className="drawer-backdrop" onClick={() => setSongsOpen(false)}>
+          <aside className="drawer song-panel" onClick={event => event.stopPropagation()}>
           <div className="panel-head">
             <div>
               <h3>歌曲管理</h3>
@@ -437,7 +489,8 @@ export default function App() {
           <p className="hint">
             「起风了」是本地参考谱（原页面 SVG，只读）；「起风了（可优化）」由 scripts/import_svg_score.py 解析出的本地 JSON 载入，可移调 / 优化。
           </p>
-        </section>
+          </aside>
+        </div>
       )}
 
       {importOpen && (
@@ -673,53 +726,86 @@ export default function App() {
       )}
 
       <main className="main-grid">
-        <aside className="panel controls">
-          <div className="key-compare">
-            <div>
-              <span>原调</span>
-              <strong>{originalSig.label}</strong>
+        <div className="left-rail">
+          <aside className="panel controls">
+            <div className="key-compare">
+              <div>
+                <span>原调</span>
+                <strong>{originalSig.label}</strong>
+              </div>
+              <div className="arrow">→</div>
+              <div>
+                <span>当前</span>
+                <strong>{currentSig.label}</strong>
+              </div>
             </div>
-            <div className="arrow">→</div>
-            <div>
-              <span>当前</span>
-              <strong>{currentSig.label}</strong>
+
+            <label className="slider-label">
+              <span>整体升降</span>
+              <strong>{signedT} 半音</strong>
+              <input
+                type="range"
+                min={-12}
+                max={12}
+                step={1}
+                value={transposition}
+                onChange={event => setTransposition(Number(event.target.value))}
+              />
+            </label>
+            <div className="slider-ends">
+              <span>-12</span>
+              <span>0</span>
+              <span>+12</span>
             </div>
-          </div>
 
-          <label className="slider-label">
-            <span>整体升降</span>
-            <strong>{signedT} 半音</strong>
-            <input
-              type="range"
-              min={-12}
-              max={12}
-              step={1}
-              value={transposition}
-              onChange={event => setTransposition(Number(event.target.value))}
-            />
-          </label>
-          <div className="slider-ends">
-            <span>-12</span>
-            <span>0</span>
-            <span>+12</span>
-          </div>
+            <div className="octave-control">
+              <span>八度</span>
+              <button onClick={() => setOctaveShift(value => Math.max(-2, value - 1))}>−1</button>
+              <button onClick={() => setOctaveShift(0)}>0</button>
+              <button onClick={() => setOctaveShift(value => Math.min(2, value + 1))}>+1</button>
+              <strong>{octaveShift > 0 ? `+${octaveShift}` : octaveShift}</strong>
+            </div>
 
-          <div className="fixed-do-card">
-            <span>简谱基准</span>
-            <strong>1=C</strong>
-            <small>1 = {anchor} = 5 吹</small>
-          </div>
+            <div className="fixed-do-card">
+              <span>简谱基准</span>
+              <strong>1=C</strong>
+              <small>1 = {anchor} = 5 吹</small>
+            </div>
 
-          <p className="hint">看五线谱时先看调号；简谱把升降号显式写出。原调只作标签，演奏看当前调。</p>
-          <p className="hint">孔位是优化器选的，不是固定映射；关掉孔位时只看音高。</p>
+            <p className="hint">看五线谱时先看调号；简谱把升降号显式写出。原调只作标签，演奏看当前调。</p>
+            <p className="hint">孔位是优化器选的，不是固定映射；关掉孔位时只看音高。</p>
 
-          <details className="duration-help">
-            <summary>时值写法</summary>
-            <p>
-              四分 <b>1</b>；二分 <b>1 —</b>；全音符 <b>1 — — —</b>；八分数字下 1 条线；十六分 2 条线；附点数字后加点；休止 <b>0</b>。
-            </p>
-          </details>
-        </aside>
+            <details className="duration-help">
+              <summary>时值写法</summary>
+              <p>
+                四分 <b>1</b>；二分 <b>1 —</b>；全音符 <b>1 — — —</b>；八分数字下 1 条线；十六分 2 条线；附点数字后加点；休止 <b>0</b>。
+              </p>
+            </details>
+          </aside>
+
+          {referenceSong ? (
+            <section className="panel reference-note">
+              <h3>参考谱只读</h3>
+              <p className="muted small">
+                这首歌是从本地保存的站点谱面导入的，只有 SVG 图像，没有解析成音符；优化器和难点报告不适用。
+              </p>
+              <p className="muted small">要用移调 / 优化，请用 MusicXML 或简谱导入同一首歌。</p>
+            </section>
+          ) : (
+            <>
+              <RecommendationTable
+                recommendations={recommendations}
+                current={effectiveTransposition}
+                onSelect={value => {
+                  setTransposition(value)
+                  setOctaveShift(0)
+                }}
+              />
+              <MetricsPanel result={result} />
+              <HardSpotList result={result} />
+            </>
+          )}
+        </div>
 
         <section
           className={`panel score-panel${
@@ -746,73 +832,58 @@ export default function App() {
                 />
               )}
             </div>
-          ) : result ? (
-            view === 'jianpu' ? (
-              <JianpuView
-                score={score}
-                transpose={transposition}
-                sig={currentSig}
-                fingerings={result.fingerings}
-                showTab={showTab}
-              />
-            ) : (
-              <>
-                <div className="score-head">
-                  <div>
-                    <h2>{score.title}</h2>
-                    <p>
-                      {score.tempo} BPM · {score.timeSignature[0]}/{score.timeSignature[1]} · 原调{' '}
-                      {originalSig.label} · 当前 {currentSig.label}（{signedT}）
-                    </p>
-                  </div>
-                  <div className="legend">
-                    <span className="legend-item">
-                      <span className="dot blow" /> 吹
-                    </span>
-                    <span className="legend-item">
-                      <span className="dot draw" /> 吸
-                    </span>
-                    <span className="legend-item">
-                      <span className="dot hard" /> 难点
-                    </span>
-                  </div>
-                </div>
-                <StaffView
-                  notes={score.notes}
-                  transpose={transposition}
-                  sig={currentSig}
-                  timeSignature={score.timeSignature}
-                  hardSpotIds={hardSpotIds}
-                />
-              </>
-            )
           ) : (
-            <div className="warn">当前移调超出 {layout.name} 的音域，换一个位置或选一个推荐调。</div>
+            <>
+              {!result && (
+                <div className="range-warning">
+                  <span>当前移调超出 {layout.name} 的音域。</span>
+                  <button onClick={() => setOctaveShift(value => Math.max(-2, value - 1))}>降八度</button>
+                  <button onClick={() => setOctaveShift(value => Math.min(2, value + 1))}>升八度</button>
+                </div>
+              )}
+              {view === 'jianpu' ? (
+                <JianpuView
+                  score={score}
+                  transpose={effectiveTransposition}
+                  sig={currentSig}
+                  fingerings={result?.fingerings ?? []}
+                  showTab={showTab}
+                />
+              ) : (
+                <>
+                  <div className="score-head">
+                    <div>
+                      <h2>{score.title}</h2>
+                      <p>
+                        {score.tempo} BPM · {score.timeSignature[0]}/{score.timeSignature[1]} · 原调{' '}
+                        {originalSig.label} · 当前 {currentSig.label}（{signedT}）
+                      </p>
+                    </div>
+                    <div className="legend">
+                      <span className="legend-item">
+                        <span className="dot blow" /> 吹
+                      </span>
+                      <span className="legend-item">
+                        <span className="dot draw" /> 吸
+                      </span>
+                      <span className="legend-item">
+                        <span className="dot hard" /> 难点
+                      </span>
+                    </div>
+                  </div>
+                  <StaffView
+                    notes={score.notes}
+                    transpose={effectiveTransposition}
+                    sig={currentSig}
+                    timeSignature={score.timeSignature}
+                    hardSpotIds={hardSpotIds}
+                  />
+                </>
+              )}
+            </>
           )}
         </section>
       </main>
-
-      {referenceSong ? (
-        <div className="lower-grid">
-          <section className="panel reference-note">
-            <h3>参考谱只读</h3>
-            <p className="muted small">
-              这首歌是从本地保存的站点谱面导入的，只有 SVG 图像，没有解析成音符；优化器和难点报告不适用。
-            </p>
-            <p className="muted small">要用移调 / 优化，请用 MusicXML 或简谱导入同一首歌。</p>
-          </section>
-        </div>
-      ) : (
-        <div className="lower-grid">
-          <MetricsPanel result={result} />
-          <RecommendationTable
-            recommendations={recommendations}
-            current={transposition}
-            onSelect={setTransposition}
-          />
-          <HardSpotList result={result} />
-        </div>
-      )}
 
       <footer>
         <span>固定 1=C · 12 孔 C 半音阶（tenor 默认）· 标准 12 孔 / 16 孔可切换</span>

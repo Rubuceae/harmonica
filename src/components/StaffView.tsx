@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { Accidental, Barline, Dot, Formatter, Renderer, Stave, StaveNote, Voice } from 'vexflow'
+import { useEffect, useRef, useState } from 'react'
+import { Accidental, Barline, Formatter, Renderer, Stave, StaveNote, Voice } from 'vexflow'
 import type { KeySignature } from '../core/keys'
 import { staffNote } from '../core/keys'
 import type { NoteEvent } from '../core/types'
@@ -25,12 +25,15 @@ function durationToVex(duration: number): { duration: string; dots: number } {
 
 export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     const render = () => {
+      let currentMeasure = 0
+      try {
       container.innerHTML = ''
       if (notes.length === 0) return
 
@@ -63,6 +66,7 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
       const measureWidth = (width - 20 - maxModifier) / MEASURES_PER_SYSTEM
 
       for (let measure = 1; measure <= maxMeasure; measure += 1) {
+        currentMeasure = measure
         const systemIndex = Math.floor((measure - 1) / MEASURES_PER_SYSTEM)
         const indexInSystem = (measure - 1) % MEASURES_PER_SYSTEM
         const modifierWidth = modifierWidths[systemIndex]
@@ -94,13 +98,13 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
         for (const note of measureNotes) {
           const spelled = staffNote(note.midi + transpose, sig)
           const dur = durationToVex(note.duration)
+          const vexDuration = `${dur.duration}${dur.dots > 0 ? 'd' : ''}`
           const staveNote = new StaveNote({
             keys: [spelled.vexKey],
-            duration: dur.duration,
+            duration: vexDuration,
             clef: 'treble',
             autoStem: true,
           })
-          if (dur.dots > 0) Dot.buildAndAttach([staveNote], { all: true })
           if (spelled.accidental) staveNote.addModifier(new Accidental(spelled.accidental), 0)
           if (hardSpotIds.has(note.id)) {
             staveNote.setStyle({ fillStyle: '#c2410c', strokeStyle: '#c2410c' })
@@ -114,6 +118,9 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
         const available = measureWidth - 18
         new Formatter().joinVoices([voice]).format([voice], available)
         voice.draw(context, stave)
+      }
+      } catch (cause) {
+        setError(`第 ${currentMeasure} 小节：${cause instanceof Error ? cause.message : String(cause)}`)
       }
     }
 
@@ -131,5 +138,10 @@ export function StaffView({ notes, transpose, sig, timeSignature, hardSpotIds }:
     }
   }, [notes, transpose, sig, timeSignature, hardSpotIds])
 
-  return <div className="staff" ref={containerRef} />
+  return (
+    <div className="staff">
+      {error && <p className="error">五线谱渲染出错：{error}</p>}
+      <div ref={containerRef} />
+    </div>
+  )
 }

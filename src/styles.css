@@ -153,9 +153,20 @@ h1 {
 
 .main-grid {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+.left-rail {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .panel {
@@ -170,8 +181,59 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  position: sticky;
-  top: 16px;
+}
+
+.octave-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.octave-control button {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.octave-control strong {
+  margin-left: auto;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.range-warning {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.range-warning button {
+  padding: 3px 8px;
+  border: 1px solid #f0d7bd;
+  border-radius: 7px;
+  background: #fffdf9;
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.recommendations .table-wrap {
+  overflow-x: auto;
+}
+
+.recommendations table {
+  font-size: 11px;
 }
 
 .key-compare {
@@ -373,8 +435,27 @@ input[type="range"] {
   text-align: center;
 }
 
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(31, 41, 51, 0.32);
+  backdrop-filter: blur(2px);
+}
+
+.drawer {
+  width: min(420px, 92vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--card);
+  box-shadow: -18px 0 50px rgba(31, 41, 51, 0.18);
+}
+
 .song-panel {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .song-save {
@@ -617,6 +698,18 @@ input[type="range"] {
   margin: 8px 0 0;
   color: #b91c1c;
   font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .left-rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
 }
 
 @media (max-width: 760px) {

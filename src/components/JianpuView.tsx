@@ -19,23 +19,28 @@ const MAX_MEASURES = 6
 const MEASURE_PAD = 8
 const NOTE_BASE = 22
 const NOTE_FONT = 20
-const LYRIC_FONT = 12.5
-const LYRIC_OFFSET = 30
+const LYRIC_FONT = 15
+const LYRIC_OFFSET = 34
 const LYRIC_GAP = 18
-
-const COL_W = Math.max(
-  22,
-  Math.min(44, (W - MARGIN * 2 - MEASURE_PAD * 2 * MAX_MEASURES) / MAX_TOKENS),
-)
+const BEAM_OFFSET = 12
+const BEAM_GAP = 3.5
 
 type RawEvent =
   | { kind: 'note'; note: NoteEvent; index: number; duration: number }
   | { kind: 'rest'; id: string; onset: number; duration: number }
 
 type Token =
-  | { kind: 'note'; note: NoteEvent; index: number; beam: number; dotted: boolean }
-  | { kind: 'dash'; id: string }
-  | { kind: 'rest'; id: string; beam: number }
+  | {
+      kind: 'note'
+      note: NoteEvent
+      index: number
+      beam: number
+      dotted: boolean
+      onset: number
+      duration: number
+    }
+  | { kind: 'dash'; id: string; onset: number }
+  | { kind: 'rest'; id: string; beam: number; onset: number; duration: number }
 
 type Measure = { measure: number; tokens: Token[] }
 
@@ -90,20 +95,29 @@ function buildMeasures(notes: NoteEvent[], measureBeats: number): Measure[] {
     const tokens: Token[] = []
     for (const event of events) {
       if (event.kind === 'note') {
+        const onset = event.note.onset
         tokens.push({
           kind: 'note',
           note: event.note,
           index: event.index,
           beam: beamLevel(event.duration),
           dotted: isDotted(event.duration),
+          onset,
+          duration: event.duration,
         })
         for (let i = 0; i < dashCount(event.duration); i += 1) {
-          tokens.push({ kind: 'dash', id: `${event.note.id}-d${i}` })
+          tokens.push({ kind: 'dash', id: `${event.note.id}-d${i}`, onset: onset + event.duration })
         }
       } else {
-        tokens.push({ kind: 'rest', id: event.id, beam: beamLevel(event.duration) })
+        tokens.push({
+          kind: 'rest',
+          id: event.id,
+          beam: beamLevel(event.duration),
+          onset: event.onset,
+          duration: event.duration,
+        })
         for (let i = 0; i < dashCount(event.duration); i += 1) {
-          tokens.push({ kind: 'dash', id: `${event.id}-d${i}` })
+          tokens.push({ kind: 'dash', id: `${event.id}-d${i}`, onset: event.onset + event.duration })
         }
       }
     }
@@ -114,7 +128,7 @@ function buildMeasures(notes: NoteEvent[], measureBeats: number): Measure[] {
 
 type LineLayout = {
   line: Measure[]
-  widths: number[]
+  measureW: number
   baseline: number
 }
 
@@ -140,27 +154,34 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
   }
   if (current.length > 0) lines.push(current)
 
-  const lineHeight = 74 + verseCount * 10 + (showTab ? 12 : 0)
-  const lineLayouts: LineLayout[] = lines.map((line, lineIndex) => ({
+  const lineHeight = 78 + verseCount * 9 + (showTab ? 12 : 0)
+  const layouts: LineLayout[] = lines.map((line, lineIndex) => ({
     line,
-    widths: line.map(measure => MEASURE_PAD * 2 + measure.tokens.length * COL_W),
+    measureW: (W - MARGIN * 2) / line.length,
     baseline: HEADER_H + lineIndex * lineHeight + NOTE_BASE,
   }))
   const height = HEADER_H + Math.max(1, lines.length) * lineHeight + 16
 
+  const stepOf = (measure: Measure, measureW: number) =>
+    (measureW - MEASURE_PAD * 2) / Math.max(1, measure.tokens.length)
+  const xOf = (layout: LineLayout, measureIndex: number, tokenIndex: number) => {
+    const measure = layout.line[measureIndex]
+    const measureX = MARGIN + measureIndex * layout.measureW
+    const step = stepOf(measure, layout.measureW)
+    return measureX + MEASURE_PAD + (tokenIndex + 0.5) * step
+  }
+
   const positions = new Map<string, { x: number; baseline: number; lineIndex: number }>()
-  lineLayouts.forEach((layout, lineIndex) => {
-    let measureX = MARGIN
+  layouts.forEach((layout, lineIndex) => {
     layout.line.forEach((measure, measureIndex) => {
       measure.tokens.forEach((token, tokenIndex) => {
         if (token.kind !== 'note') return
         positions.set(token.note.id, {
-          x: measureX + MEASURE_PAD + tokenIndex * COL_W + COL_W / 2,
+          x: xOf(layout, measureIndex, tokenIndex),
           baseline: layout.baseline,
           lineIndex,
         })
       })
-      measureX += layout.widths[measureIndex]
     })
   })
 
@@ -204,31 +225,35 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
           原调 {originalLabel} · 当前 {sig.label}
         </text>
 
-        {lineLayouts.map((layout, lineIndex) => {
+        {layouts.map((layout, lineIndex) => {
           const barBottom =
-            layout.baseline +
-            LYRIC_OFFSET +
-            Math.max(0, verseCount - 1) * LYRIC_GAP +
-            8
+            layout.baseline + LYRIC_OFFSET + Math.max(0, verseCount - 1) * LYRIC_GAP + 12
           return (
             <g key={lineIndex}>
               {layout.line.map((measure, measureIndex) => {
-                const measureX =
-                  MARGIN +
-                  layout.widths.slice(0, measureIndex).reduce((sum, value) => sum + value, 0)
-                const measureW = layout.widths[measureIndex]
-                const tokens = measure.tokens
-                const groups: { token: Token; index: number }[][] = []
-                let group: { token: Token; index: number }[] = []
-                tokens.forEach((token, tokenIndex) => {
-                  if (token.kind === 'note' && token.beam >= 1) {
-                    group.push({ token, index: tokenIndex })
-                  } else if (group.length > 0) {
+                const measureX = MARGIN + measureIndex * layout.measureW
+                const step = stepOf(measure, layout.measureW)
+                const groups: { token: Token; index: number; beat: number }[][] = []
+                let group: { token: Token; index: number; beat: number }[] = []
+                let groupBeat = -1
+                const flush = () => {
+                  if (group.length > 0) {
                     groups.push(group)
                     group = []
+                    groupBeat = -1
+                  }
+                }
+                measure.tokens.forEach((token, tokenIndex) => {
+                  if (token.kind === 'note' && token.beam >= 1) {
+                    const beat = Math.floor(token.onset - (measure.measure - 1) * measureBeats + 1e-6)
+                    if (group.length > 0 && beat !== groupBeat) flush()
+                    group.push({ token, index: tokenIndex, beat })
+                    groupBeat = beat
+                  } else {
+                    flush()
                   }
                 })
-                if (group.length > 0) groups.push(group)
+                flush()
 
                 return (
                   <g key={measure.measure}>
@@ -240,8 +265,8 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                       stroke="#b6c2cf"
                       strokeWidth={1}
                     />
-                    {tokens.map((token, tokenIndex) => {
-                      const x = measureX + MEASURE_PAD + tokenIndex * COL_W + COL_W / 2
+                    {measure.tokens.map((token, tokenIndex) => {
+                      const x = measureX + MEASURE_PAD + (tokenIndex + 0.5) * step
                       if (token.kind === 'dash') {
                         return (
                           <line
@@ -333,17 +358,10 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                           {showTab && fingerings[token.index] && (
                             <text
                               x={x}
-                              y={
-                                layout.baseline +
-                                LYRIC_OFFSET +
-                                verseCount * LYRIC_GAP +
-                                2
-                              }
+                              y={layout.baseline + LYRIC_OFFSET + verseCount * LYRIC_GAP + 2}
                               textAnchor="middle"
-                              fontSize={8}
-                              fill={
-                                fingerings[token.index].breath === 'blow' ? '#2563eb' : '#dc2626'
-                              }
+                              fontSize={9}
+                              fill={fingerings[token.index].breath === 'blow' ? '#2563eb' : '#dc2626'}
                             >
                               {fingerings[token.index].hole}
                               {fingerings[token.index].breath === 'blow' ? '↑' : '↓'}
@@ -355,9 +373,7 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                     })}
                     {groups.map((beamGroup, groupIndex) => {
                       const maxLevel = Math.max(
-                        ...beamGroup.map(item =>
-                          item.token.kind === 'note' ? item.token.beam : 0,
-                        ),
+                        ...beamGroup.map(item => (item.token.kind === 'note' ? item.token.beam : 0)),
                       )
                       return Array.from({ length: maxLevel }).map((_, levelIndex) => {
                         const level = levelIndex + 1
@@ -366,24 +382,19 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                         )
                         if (matching.length === 0) return null
                         const firstX =
-                          measureX +
-                          MEASURE_PAD +
-                          matching[0].index * COL_W +
-                          COL_W / 2 -
-                          COL_W / 2
+                          measureX + MEASURE_PAD + (matching[0].index + 0.5) * step - step * 0.35
                         const lastX =
                           measureX +
                           MEASURE_PAD +
-                          matching[matching.length - 1].index * COL_W +
-                          COL_W / 2 +
-                          COL_W / 2
+                          (matching[matching.length - 1].index + 0.5) * step +
+                          step * 0.35
                         return (
                           <line
                             key={`beam-${groupIndex}-${level}`}
                             x1={firstX}
                             x2={lastX}
-                            y1={layout.baseline + 16 + levelIndex * 4}
-                            y2={layout.baseline + 16 + levelIndex * 4}
+                            y1={layout.baseline + BEAM_OFFSET + levelIndex * BEAM_GAP}
+                            y2={layout.baseline + BEAM_OFFSET + levelIndex * BEAM_GAP}
                             stroke="#0f172a"
                             strokeWidth={1.8}
                             strokeLinecap="round"
@@ -393,9 +404,9 @@ export function JianpuView({ score, transpose, sig, fingerings, showTab }: Props
                     })}
                     {measureIndex === layout.line.length - 1 && (
                       <line
-                        x1={measureX + measureW}
+                        x1={measureX + layout.measureW}
                         y1={layout.baseline - 28}
-                        x2={measureX + measureW}
+                        x2={measureX + layout.measureW}
                         y2={barBottom}
                         stroke="#b6c2cf"
                         strokeWidth={1}
