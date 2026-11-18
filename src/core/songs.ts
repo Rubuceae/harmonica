@@ -2,15 +2,10 @@ import { DURATION_DEMO, demoScore } from './demo'
 import { parseJianpu } from './jianpu'
 import type { Score } from './types'
 
-export type SongKind = 'score' | 'reference'
-
 export type SongEntry = {
   id: string
   title: string
-  kind: SongKind
-  score?: Score
-  svgUrl?: string
-  svgText?: string
+  score: Score
   builtin?: boolean
 }
 
@@ -21,15 +16,8 @@ function durationScore(): Score {
 }
 
 export const BUILTIN_SONGS: SongEntry[] = [
-  { id: 'builtin-little-star', title: '小星星', kind: 'score', score: demoScore(), builtin: true },
-  { id: 'builtin-duration', title: '时值示例', kind: 'score', score: durationScore(), builtin: true },
-  {
-    id: 'builtin-qifengle',
-    title: '起风了',
-    kind: 'reference',
-    svgUrl: '/songs/qifengle.svg',
-    builtin: true,
-  },
+  { id: 'builtin-little-star', title: '小星星', score: demoScore(), builtin: true },
+  { id: 'builtin-duration', title: '时值示例', score: durationScore(), builtin: true },
 ]
 
 export function loadSavedSongs(): SongEntry[] {
@@ -38,12 +26,7 @@ export function loadSavedSongs(): SongEntry[] {
     if (!raw) return []
     const data = JSON.parse(raw) as SongEntry[]
     if (!Array.isArray(data)) return []
-    return data.filter(
-      song =>
-        song &&
-        typeof song.title === 'string' &&
-        (song.kind === 'score' ? Boolean(song.score) : Boolean(song.svgText)),
-    )
+    return data.filter(song => song && typeof song.title === 'string' && Boolean(song.score))
   } catch {
     return []
   }

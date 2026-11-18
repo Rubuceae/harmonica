@@ -28,10 +28,6 @@ export default function App() {
   const parsedT = Number(params.get('t') ?? 0)
   const initialT = Number.isFinite(parsedT) ? Math.max(-12, Math.min(12, parsedT)) : 0
   const isDurationDemo = params.get('demo') === 'duration'
-  const initialReference =
-    params.get('song') === 'qifengle'
-      ? BUILTIN_SONGS.find(song => song.id === 'builtin-qifengle') ?? null
-      : null
   const initialScore = isDurationDemo
     ? parseJianpu(DURATION_DEMO, 96, { tonic: 0, mode: 'major' }, '时值示例')
     : demoScore()
@@ -50,29 +46,18 @@ export default function App() {
 
   const importParam = params.get('import')
   const [importOpen, setImportOpen] = useState(
-    importParam === '1' ||
-      importParam === 'image' ||
-      importParam === 'musicxml' ||
-      importParam === 'reference',
+    importParam === '1' || importParam === 'image' || importParam === 'musicxml',
   )
-  const [importTab, setImportTab] = useState<'jianpu' | 'musicxml' | 'image' | 'reference'>(
-    importParam === 'image'
-      ? 'image'
-      : importParam === 'musicxml'
-        ? 'musicxml'
-        : importParam === 'reference'
-          ? 'reference'
-          : 'jianpu',
+  const [importTab, setImportTab] = useState<'jianpu' | 'musicxml' | 'image'>(
+    importParam === 'image' ? 'image' : importParam === 'musicxml' ? 'musicxml' : 'jianpu',
   )
   const [imageTitle, setImageTitle] = useState('')
   const [songsOpen, setSongsOpen] = useState(params.get('songs') === '1')
   const [savedSongs, setSavedSongs] = useState<SongEntry[]>(() => loadSavedSongs())
   const [currentSongId, setCurrentSongId] = useState(
-    initialReference ? 'builtin-qifengle' : isDurationDemo ? 'builtin-duration' : 'builtin-little-star',
+    isDurationDemo ? 'builtin-duration' : 'builtin-little-star',
   )
   const [songTitleDraft, setSongTitleDraft] = useState('')
-  const [referenceSong, setReferenceSong] = useState<SongEntry | null>(initialReference)
-  const [referenceError, setReferenceError] = useState(false)
   const [jianpuDraft, setJianpuDraft] = useState(DEMO_JIANPU)
   const [titleDraft, setTitleDraft] = useState(isDurationDemo ? '时值示例' : '小星星')
   const [lyricsDraft, setLyricsDraft] = useState(isDurationDemo ? '' : DEMO_LYRICS)
@@ -103,12 +88,6 @@ export default function App() {
   )
 
   const allSongs = [...BUILTIN_SONGS, ...savedSongs]
-  const referenceSrc = referenceSong
-    ? referenceSong.svgUrl ??
-      (referenceSong.svgText
-        ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(referenceSong.svgText)}`
-        : '')
-    : ''
 
   useEffect(() => {
     let cancelled = false
@@ -123,7 +102,6 @@ export default function App() {
             {
               id: 'local-qifengle-score',
               title: '起风了（可优化）',
-              kind: 'score' as const,
               score: data,
             },
           ]
@@ -131,7 +109,6 @@ export default function App() {
           return next
         })
         if (params.get('song') === 'editable') {
-          setReferenceSong(null)
           setScore(data)
           setCurrentSongId('local-qifengle-score')
           setTransposition(0)
@@ -167,7 +144,6 @@ export default function App() {
         const entry: SongEntry = {
           id: 'local-edelweiss-score',
           title: '雪绒花（可优化）',
-          kind: 'score',
           score: finalScore,
         }
         setSavedSongs(previous => {
@@ -177,7 +153,6 @@ export default function App() {
           return next
         })
         if (params.get('song') === 'edelweiss') {
-          setReferenceSong(null)
           setScore(finalScore)
           setCurrentSongId(entry.id)
           setTransposition(0)
@@ -195,15 +170,7 @@ export default function App() {
   const anchor = layout.id === 'standard12' ? 'C5（第三间）' : 'C4（下加一线）'
 
   const selectSong = (song: SongEntry) => {
-    setReferenceError(false)
     setCurrentSongId(song.id)
-    if (song.kind === 'reference') {
-      setReferenceSong(song)
-      setSongsOpen(false)
-      return
-    }
-    if (!song.score) return
-    setReferenceSong(null)
     setScore(song.score)
     setTransposition(0)
     setView('jianpu')
@@ -213,7 +180,7 @@ export default function App() {
 
   const saveCurrentSong = () => {
     const title = songTitleDraft.trim() || score.title || '未命名'
-    const entry: SongEntry = { id: newSongId(), title, kind: 'score', score }
+    const entry: SongEntry = { id: newSongId(), title, score }
     const next = [...savedSongs, entry]
     setSavedSongs(next)
     saveSongs(next)
@@ -228,38 +195,6 @@ export default function App() {
     if (currentSongId === id) setCurrentSongId('')
   }
 
-  const onReferenceFile = async (file: File | undefined) => {
-    if (!file) return
-    setImportError('')
-    setImportStatus(`正在读取 ${file.name}…`)
-    try {
-      const text = await file.text()
-      let svg = ''
-      if (file.name.toLowerCase().endsWith('.svg')) {
-        svg = text
-      } else {
-        const doc = new DOMParser().parseFromString(text, 'text/html')
-        const node = doc.querySelector('svg.sheet-svg') ?? doc.querySelector('svg')
-        svg = node?.outerHTML ?? ''
-      }
-      if (!svg.includes('<svg')) throw new Error('文件里没有找到 SVG 谱面')
-      const title = file.name.replace(/\.[^.]+$/, '') || '参考谱'
-      const entry: SongEntry = { id: newSongId(), title, kind: 'reference', svgText: svg }
-      const next = [...savedSongs, entry]
-      setSavedSongs(next)
-      saveSongs(next)
-      setCurrentSongId(entry.id)
-      setReferenceSong(entry)
-      setReferenceError(false)
-      setSongsOpen(false)
-      setImportOpen(false)
-      setImportStatus('')
-    } catch (error) {
-      setImportStatus('')
-      setImportError(error instanceof Error ? error.message : String(error))
-    }
-  }
-
   const routeImportFile = async (file: File) => {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
     if (['xml', 'musicxml', 'mxl'].includes(ext)) {
@@ -268,10 +203,6 @@ export default function App() {
     }
     if (['png', 'jpg', 'jpeg', 'tif', 'tiff', 'pdf'].includes(ext)) {
       await onImageFile(file)
-      return
-    }
-    if (['html', 'htm', 'svg'].includes(ext)) {
-      await onReferenceFile(file)
       return
     }
     if (['txt', 'text'].includes(ext)) {
@@ -309,7 +240,6 @@ export default function App() {
         composer: composerDraft.trim() || undefined,
         lyricist: lyricistDraft.trim() || undefined,
       })
-      setReferenceSong(null)
       setCurrentSongId('')
       setTransposition(0)
       setView('jianpu')
@@ -326,7 +256,6 @@ export default function App() {
     try {
       const parsed = await loadMusicXmlFile(file)
       setScore(parsed)
-      setReferenceSong(null)
       setCurrentSongId('')
       setTransposition(0)
       setView('jianpu')
@@ -364,7 +293,6 @@ export default function App() {
       }
       const parsed = parseMusicXml(payload, imageTitle.trim() || file.name.replace(/\.[^.]+$/, ''))
       setScore(parsed)
-      setReferenceSong(null)
       setCurrentSongId('')
       setTransposition(0)
       setView('jianpu')
@@ -460,23 +388,22 @@ export default function App() {
               关闭
             </button>
           </div>
-          {!referenceSong && (
-            <div className="song-save">
-              <input
-                type="text"
-                placeholder={`保存为：${score.title}`}
-                value={songTitleDraft}
-                onChange={event => setSongTitleDraft(event.target.value)}
-              />
-              <button onClick={saveCurrentSong}>保存当前乐谱</button>
-            </div>
-          )}
+          <div className="song-save">
+            <input
+              type="text"
+              placeholder={`保存为：${score.title}`}
+              value={songTitleDraft}
+              onChange={event => setSongTitleDraft(event.target.value)}
+            />
+            <button className="import-button" onClick={saveCurrentSong}>
+              保存当前乐谱
+            </button>
+          </div>
           <ul className="song-list">
             {allSongs.map(song => (
               <li key={song.id} className={currentSongId === song.id ? 'active' : ''}>
                 <button className="song-main" onClick={() => selectSong(song)}>
                   <span className="song-title">{song.title}</span>
-                  <span className="song-kind">{song.kind === 'reference' ? '参考谱' : '可优化'}</span>
                 </button>
                 {!song.builtin && (
                   <button className="ghost song-delete" onClick={() => deleteSong(song.id)}>
@@ -487,7 +414,7 @@ export default function App() {
             ))}
           </ul>
           <p className="hint">
-            「起风了」是本地参考谱（原页面 SVG，只读）；「起风了（可优化）」由 scripts/import_svg_score.py 解析出的本地 JSON 载入，可移调 / 优化。
+            「起风了（可优化）」「雪绒花（可优化）」来自本地文件；导入的简谱 / MusicXML / 图片结果也可以保存到这里。
           </p>
           </aside>
         </div>
@@ -517,7 +444,7 @@ export default function App() {
               if (file) void routeImportFile(file)
             }}
           >
-            拖入文件：MusicXML / .mxl / 简谱 .txt / 图片 / PDF / 参考页 .html / .svg
+            拖入文件：MusicXML / .mxl / 简谱 .txt / 图片 / PDF
           </div>
 
           <div className="segmented" role="group" aria-label="导入格式">
@@ -547,15 +474,6 @@ export default function App() {
               }}
             >
               图片 OMR
-            </button>
-            <button
-              className={importTab === 'reference' ? 'active' : ''}
-              onClick={() => {
-                setImportTab('reference')
-                setImportError('')
-              }}
-            >
-              参考页
             </button>
           </div>
 
@@ -689,7 +607,7 @@ export default function App() {
                 支持 .xml / .musicxml / .mxl；取第一个 part 的最高音旋律。解析失败会显示原因。
               </p>
             </div>
-          ) : importTab === 'image' ? (
+          ) : (
             <div className="import-xml">
               <input
                 type="text"
@@ -705,17 +623,6 @@ export default function App() {
               <p className="hint">
                 本地 OMR：先在项目目录运行 <code>npm run omr</code>（需要 Audiveris 5.x）。
                 支持印刷体五线谱图片 / PDF；简谱图片暂不支持；曲名默认用文件名。
-              </p>
-            </div>
-          ) : (
-            <div className="import-xml">
-              <input
-                type="file"
-                accept=".html,.htm,.svg,text/html,image/svg+xml"
-                onChange={event => onReferenceFile(event.target.files?.[0])}
-              />
-              <p className="hint">
-                把站点保存的 HTML 或 SVG 加入歌曲库；只读参考谱，优化器 / 移调不适用。
               </p>
             </div>
           )}
@@ -783,56 +690,21 @@ export default function App() {
             </details>
           </aside>
 
-          {referenceSong ? (
-            <section className="panel reference-note">
-              <h3>参考谱只读</h3>
-              <p className="muted small">
-                这首歌是从本地保存的站点谱面导入的，只有 SVG 图像，没有解析成音符；优化器和难点报告不适用。
-              </p>
-              <p className="muted small">要用移调 / 优化，请用 MusicXML 或简谱导入同一首歌。</p>
-            </section>
-          ) : (
-            <>
-              <RecommendationTable
-                recommendations={recommendations}
-                current={effectiveTransposition}
-                onSelect={value => {
-                  setTransposition(value)
-                  setOctaveShift(0)
-                }}
-              />
-              <MetricsPanel result={result} />
-              <HardSpotList result={result} />
-            </>
-          )}
+          <RecommendationTable
+            recommendations={recommendations}
+            current={effectiveTransposition}
+            onSelect={value => {
+              setTransposition(value)
+              setOctaveShift(0)
+            }}
+          />
+          <MetricsPanel result={result} />
+          <HardSpotList result={result} />
         </div>
 
         <section
-          className={`panel score-panel${
-            referenceSong ? ' reference-panel' : view === 'jianpu' ? ' jianpu-panel' : ''
-          }`}
+          className={`panel score-panel${view === 'jianpu' ? ' jianpu-panel' : ''}`}
         >
-          {referenceSong ? (
-            <div className="reference-score">
-              <div className="reference-head">
-                <span className="badge">参考谱</span>
-                <a href={referenceSrc} target="_blank" rel="noreferrer">
-                  打开 SVG
-                </a>
-              </div>
-              {referenceError || !referenceSrc ? (
-                <p className="hint">
-                  参考谱文件未找到：本地参考 SVG 缺失，或导入的 HTML 里没有谱面。
-                </p>
-              ) : (
-                <img
-                  src={referenceSrc}
-                  alt={`${referenceSong.title} 参考谱`}
-                  onError={() => setReferenceError(true)}
-                />
-              )}
-            </div>
-          ) : (
             <>
               {!result && (
                 <div className="range-warning">
@@ -881,7 +753,6 @@ export default function App() {
                 </>
               )}
             </>
-          )}
         </section>
       </main>
 

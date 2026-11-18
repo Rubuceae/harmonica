@@ -83,9 +83,8 @@ describe('demo lyrics', () => {
 })
 
 describe('song library', () => {
-  it('includes the built-in songs and the 起风了 reference', () => {
-    expect(BUILTIN_SONGS.map(song => song.title)).toEqual(['小星星', '时值示例', '起风了'])
-    expect(BUILTIN_SONGS[2].kind).toBe('reference')
-    expect(BUILTIN_SONGS[2].svgUrl).toBe('/songs/qifengle.svg')
+  it('includes the built-in score songs', () => {
+    expect(BUILTIN_SONGS.map(song => song.title)).toEqual(['小星星', '时值示例'])
+    expect(BUILTIN_SONGS.every(song => song.score.notes.length > 0)).toBe(true)
   })
 })

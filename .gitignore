@@ -4,8 +4,6 @@ dist/
 .DS_Store
 *.log
 *.tsbuildinfo
-reference/
-public/songs/qifengle.svg
 public/songs/qifengle.json
 public/songs/edelweiss.jianpu.txt
 public/songs/edelweiss.lyrics.txt
