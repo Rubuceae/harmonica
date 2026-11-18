@@ -42,11 +42,17 @@
 
 - 内置：小星星、时值示例、起风了（参考谱）。
 - 「保存当前乐谱」把当前简谱 / MusicXML / 图片识别结果存到 localStorage；刷新后还在，可删除。
-- 起风了 是从你下载的页面导入的**参考谱**（SVG），只显示谱面；优化器 / 移调不适用。要用优化，请用 MusicXML 或简谱导入同一首歌。
+- 起风了（参考谱）：从你下载的页面导入的 SVG，只显示谱面。
+- 起风了（可优化）：由 `scripts/import_svg_score.py` 从参考 SVG 解析出 **220 个音符 / 29 小节 / 两段歌词**，存到本地 `public/songs/qifengle.json`（gitignore）；可移调 / 优化。
+- 参考谱文件与可优化 JSON 都是本地文件，不随仓库发布。
 
 ![起风了参考谱](docs/reference.png)
 
-> 参考谱 SVG 来自站点页面，放在本地 `public/songs/qifengle.svg`，已加入 `.gitignore`，不会随仓库发布。
+> 参考谱 SVG 与解析后的 JSON 都在本地 `public/songs/`，已加入 `.gitignore`，不会随仓库发布。
+
+![起风了（可优化）](docs/qifengle.png)
+
+解析脚本：`python3 scripts/import_svg_score.py`（默认 `reference/sheet.svg` → `public/songs/qifengle.json`）。
 
 ## 时值显示
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { HardSpotList } from './components/HardSpotList'
 import { JianpuView } from './components/JianpuView'
 import { MetricsPanel } from './components/MetricsPanel'
@@ -104,6 +104,41 @@ export default function App() {
         ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(referenceSong.svgText)}`
         : '')
     : ''
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/songs/qifengle.json')
+      .then(response => (response.ok ? response.json() : null))
+      .then((data: Score | null) => {
+        if (!data || cancelled) return
+        setSavedSongs(previous => {
+          if (previous.some(song => song.id === 'local-qifengle-score')) return previous
+          const next = [
+            ...previous,
+            {
+              id: 'local-qifengle-score',
+              title: '起风了（可优化）',
+              kind: 'score' as const,
+              score: data,
+            },
+          ]
+          saveSongs(next)
+          return next
+        })
+        if (params.get('song') === 'editable') {
+          setReferenceSong(null)
+          setScore(data)
+          setCurrentSongId('local-qifengle-score')
+          setTransposition(-6)
+          setView('jianpu')
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const signedT = transposition > 0 ? `+${transposition}` : String(transposition)
   const anchor = layout.id === 'standard12' ? 'C5（第三间）' : 'C4（下加一线）'
@@ -400,7 +435,7 @@ export default function App() {
             ))}
           </ul>
           <p className="hint">
-            「起风了」是本地参考谱（来自你下载的页面），只显示谱面；要优化 / 移调请导入 MusicXML 或简谱。
+            「起风了」是本地参考谱（原页面 SVG，只读）；「起风了（可优化）」由 scripts/import_svg_score.py 解析出的本地 JSON 载入，可移调 / 优化。
           </p>
         </section>
       )}

@@ -6,3 +6,4 @@ dist/
 *.tsbuildinfo
 reference/
 public/songs/qifengle.svg
+public/songs/qifengle.json
